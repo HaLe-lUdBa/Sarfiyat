@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>الصرفيات</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f7a4d">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top"><div id="title">الصرفيات</div><div id="syncState" class="sync"></div></header>
+<main id="view"></main>
+<nav id="tabs">
+  <button data-tab="home">الرئيسية</button>
+  <button data-tab="add" class="plus">+ إضافة</button>
+  <button data-tab="log">السجل</button>
+  <button data-tab="wallets">المحافظ</button>
+  <button data-tab="settings">الإعدادات</button>
+</nav>
+<div id="modal" hidden></div>
+<div id="toast" hidden></div>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
