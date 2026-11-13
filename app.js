@@ -55,7 +55,7 @@ const wallets = (all) => S.wallets.filter((w) => all || !w.hidden).sort((a, b) =
 const cats = (all) => S.categories.filter((c) => all || !c.hidden).sort((a, b) => a.order - b.order);
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
-const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f7a4d' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
+const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
 function modal(html) { const m = $('#modal'); m.innerHTML = `<div class="sheet">${html}</div>`; m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }
 function closeModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; }
@@ -65,6 +65,9 @@ const parseNum = (s) => { const n = parseFloat(String(s).replace(/[٠-٩]/g, (d)
 function applyTheme() { const t = S.settings.theme; if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t); }
 
 /* ---------------- التنقل ---------------- */
+ui.open = { h: {}, w: {} };
+const isOpen = (sc, y, i) => (ui.open[sc][y] !== undefined ? ui.open[sc][y] : i === 0);
+document.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName === 'DETAILS' && d.dataset.yr) ui.open[d.dataset.sc][d.dataset.yr] = d.open; }, true);
 function go(tab) { ui.tab = tab; render(); window.scrollTo(0, 0); }
 function render() {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === ui.tab));
@@ -92,10 +95,10 @@ function vHome() {
   const usedCats = cs.filter((c) => visible.some((k) => sums[k].byCat[c.id]));
   const years = {}; visible.forEach((k) => (years[k.slice(0, 4)] = years[k.slice(0, 4)] || []).push(k));
   const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>المصروف</th><th>المتبقي</th><th>الراتب</th><th>نسبة التوفير</th></tr>`;
-  const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details ${i === 0 ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td>${Core.monthLabel(k, ms)}<div class="mut">${k}</div></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}">${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td><b>${fmt(s.salaryExp)}</b></td><td class="${s.remaining < 0 ? 'bad' : 'good'}">${s.salary ? fmt(s.remaining) : ''}</td><td>${s.salary ? fmt(s.salary) : ''}</td><td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
+  const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="h" data-yr="${y}" ${isOpen('h', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td><b>${k}</b></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}">${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td><b>${fmt(s.salaryExp)}</b></td><td class="${s.remaining < 0 ? 'bad' : 'good'}">${s.salary ? fmt(s.remaining) : ''}</td><td>${s.salary ? fmt(s.salary) : ''}</td><td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
   const top = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, v]) => `<span class="tag ${cById(id) && cById(id).kind === 'saving' ? 'sv' : ''}">${esc(cById(id) ? cById(id).name : '؟')} ${fmt(v)}</span>`).join(' ');
   return `${over ? `<div class="alert">⚠ تنبيه: صرفت ${fmt(m.salaryExp)} وهذا أكثر من راتب هذا الشهر (${fmt(m.salary)}) بزيادة ${fmt(m.salaryExp - m.salary)}</div>` : ''}
-  <div class="card"><div class="row"><h2 class="sp">${Core.monthLabel(key, ms)} <span class="mut">${key}</span></h2><button class="b sm" data-act="salary" data-k="${key}">الراتب: ${m.salary ? fmt(m.salary) : 'حدد'}</button></div>
+  <div class="card"><div class="row"><h2 class="sp"><b>${key}</b></h2><button class="b sm" data-act="salary" data-k="${key}">الراتب: ${m.salary ? fmt(m.salary) : 'حدد'}</button></div>
   <div class="row"><div class="sp"><div class="mut">مصروف من الراتب</div><div class="big ${over ? 'bad' : ''}">${fmt(m.salaryExp)}</div></div>
   <div class="sp"><div class="mut">المتبقي (التوفير)</div><div class="big ${m.remaining < 0 ? 'bad' : 'good'}">${m.salary ? fmt(m.remaining) : '—'}</div></div></div>
   <div class="bar ${over ? 'over' : ''}"><i style="width:${pct}%"></i></div>
@@ -115,7 +118,7 @@ function vAdd() {
   <div class="card">
   <h3 style="margin-top:0">${t === 'transfer' ? 'من محفظة' : t === 'income' ? 'تدخل في محفظة' : 'ادفع من محفظة'}</h3>${walBtns(ui.wallet, 'pickWallet')}
   ${t === 'transfer' ? `<h3>إلى محفظة</h3>${walBtns(ui.toWallet, 'pickTo')}` : ''}
-  ${t === 'exp' ? `<h3>التصنيف</h3><div class="cats">${cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join('')}</div>` : ''}
+  ${t === 'exp' ? `<h3>الخصم من</h3><div class="src"><button class="b ${(ui.pay || 'salary') === 'salary' ? 'pri' : ''}" data-act="pickPay" data-p="salary">الراتب</button><button class="b ${ui.pay === 'saving' ? 'pri' : ''}" data-act="pickPay" data-p="saving">التوفير</button></div><h3>التصنيف</h3><div class="cats">${cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join('')}</div>` : ''}
   <div class="row"><div class="sp"><label class="f">${t === 'exp' ? 'السعر' : 'المبلغ'}</label><input id="f_amt" inputmode="decimal" placeholder="0"></div>
   ${t === 'exp' ? `<div style="width:90px"><label class="f">الكمية</label><input id="f_qty" inputmode="decimal" value="1"></div>` : ''}
   ${t === 'transfer' ? `<div style="width:120px"><label class="f">+ رسوم</label><input id="f_fee" inputmode="decimal" placeholder="0"></div>` : ''}</div>
@@ -133,7 +136,7 @@ function vLog() {
   const ms = S.settings.monthStart; const keys = Core.monthKeys(S); const key = ui.logMonth || ui.month || curKey(); ui.logMonth = key;
   const list = S.tx.filter((t) => !t.del && Core.monthKey(t.ts, ms) === key).filter((t) => !ui.logFilter || ((cById(t.cat) || {}).name || '').includes(ui.logFilter) || (t.note || '').includes(ui.logFilter)).sort((a, b) => b.ts - a.ts);
   const byDay = {}; list.forEach((t) => (byDay[Core.fmtDate(t.ts)] = byDay[Core.fmtDate(t.ts)] || []).push(t));
-  return `<div class="card"><div class="row"><select id="logSel" data-chg="logMonth" style="flex:1">${[...new Set([key, ...keys])].sort().reverse().map((k) => `<option value="${k}" ${k === key ? 'selected' : ''}>${Core.monthLabel(k, ms)} (${k})</option>`).join('')}</select><input id="logQ" placeholder="بحث" value="${esc(ui.logFilter)}" data-chg="logQ" style="flex:1"></div>
+  return `<div class="card"><div class="row"><select id="logSel" data-chg="logMonth" style="flex:3">${[...new Set([key, ...keys])].sort().reverse().map((k) => `<option value="${k}" ${k === key ? 'selected' : ''}>${k}</option>`).join('')}</select><input id="logQ" placeholder="بحث" value="${esc(ui.logFilter)}" data-chg="logQ" style="flex:1;min-width:0;width:90px"></div>
   <div class="mut">${list.length} عملية</div></div>
   ${Object.keys(byDay).map((d) => `<div class="card"><h3 style="margin-top:0">${d}</h3>${byDay[d].map(itemHtml).join('')}</div>`).join('') || '<div class="card mut">لا توجد عمليات</div>'}`;
 }
@@ -163,8 +166,8 @@ function vWallets() {
   const total = ws.reduce((s, w) => s + (bal[w.id] || 0), 0);
   const keys = Core.monthKeys(S).filter((k) => Core.monthRange(k, ms)[0] >= (S.anchorTs ? 0 : 0));
   const years = {}; keys.forEach((k) => (years[k.slice(0, 4)] = years[k.slice(0, 4)] || []).push(k));
-  const head = `<tr><th rowspan="2">الفترة</th>${ws.map((w) => `<th colspan="3">${esc(w.name)}</th>`).join('')}<th colspan="3">الكلي</th></tr><tr>${[...ws, 0].map(() => '<th>بداية</th><th>نهاية</th><th>الفرق</th>').join('')}</tr>`;
-  const tbl = Object.keys(years).sort().reverse().map((y, i) => `<details ${i === 0 ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${head}${years[y].map((k) => { const [a, b] = Core.monthRange(k, ms); let s0 = 0, s1 = 0; const cells = ws.map((w) => { const x = balAt(ser[w.id], a - 1), y2 = balAt(ser[w.id], b); s0 += x; s1 += y2; return `<td>${fmt(x)}</td><td>${fmt(y2)}</td><td class="${y2 - x < 0 ? 'bad' : 'good'}">${fmt(y2 - x)}</td>`; }).join(''); return `<tr><td>${Core.monthLabel(k, ms)}<div class="mut">${k}</div></td>${cells}<td>${fmt(s0)}</td><td>${fmt(s1)}</td><td class="${s1 - s0 < 0 ? 'bad' : 'good'}">${fmt(s1 - s0)}</td></tr>`; }).join('')}</table></div></details>`).join('');
+  const head = `<tr><th rowspan="2">الفترة</th>${ws.map((w) => `<th colspan="3">${esc(w.name)}</th>`).join('')}<th colspan="3">الكلي</th></tr><tr>${[...ws, 0].map(() => '<th>بداية الشهر</th><th>نهاية الشهر</th><th>الفرق</th>').join('')}</tr>`;
+  const tbl = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="w" data-yr="${y}" ${isOpen('w', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${head}${years[y].map((k) => { const [a, b] = Core.monthRange(k, ms); let s0 = 0, s1 = 0; const cells = ws.map((w) => { const x = balAt(ser[w.id], a - 1), y2 = balAt(ser[w.id], b); s0 += x; s1 += y2; return `<td>${fmt(x)}</td><td>${fmt(y2)}</td><td class="${y2 - x < 0 ? 'bad' : 'good'}">${fmt(y2 - x)}</td>`; }).join(''); return `<tr><td><b>${k}</b></td>${cells}<td>${fmt(s0)}</td><td>${fmt(s1)}</td><td class="${s1 - s0 < 0 ? 'bad' : 'good'}">${fmt(s1 - s0)}</td></tr>`; }).join('')}</table></div></details>`).join('');
   return `<div class="card"><h2>الأرصدة الحالية</h2><div class="wal">${ws.map((w) => `<div class="wb">${walletIcon(w)}<b>${esc(w.name)}</b><span>${fmt(bal[w.id])}</span></div>`).join('')}</div><div class="row"><div class="sp mut">الكلي</div><div class="big">${fmt(total)}</div></div>
   <div class="mut">الأرصدة تتحدث تلقائياً مع كل عملية. السجلات القديمة (قبل 2020) بدون محفظة ولا تؤثر على الأرصدة.</div></div>
   <h3>بداية ونهاية كل شهر (مثل شيت total)</h3>${tbl}`;
@@ -177,8 +180,8 @@ function vSettings() {
   <label class="f">يبدأ الشهر من اليوم (ويمتد لقبل اليوم نفسه من الشهر التالي)</label><input id="s_ms" type="number" min="1" max="28" value="${S.settings.monthStart}" data-chg="setMs">
   <label class="f">المظهر</label><select data-chg="setTheme">${[['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'غامق']].map(([v, l]) => `<option value="${v}" ${S.settings.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
   <label class="f">إخفاء الأشهر قبل تاريخ (لا يحذفها)</label><input type="date" value="${S.settings.hideBefore ? Core.fmtDate(S.settings.hideBefore).replace(/\//g, '-') : ''}" data-chg="setHide"></div>
-  <div class="card"><h2>المحافظ</h2>${wallets(true).map((w, i) => `<div class="item">${walletIcon(w, 'mini')}<div class="sp"><b>${esc(w.name)}</b>${w.hidden ? ' <span class="mut">(مخفية)</span>' : ''}</div><button class="b sm" data-act="editWallet" data-id="${w.id}">تعديل</button><span class="drag"><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="-1">▲</button><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editWallet" data-id="">+ محفظة جديدة</button></div>
-  <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><button class="b sm" data-act="editCat" data-id="${c.id}">تعديل</button><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button></div>
+  <div class="card"><h2>المحافظ</h2>${wallets(true).map((w, i) => `<div class="item">${walletIcon(w, 'mini')}<div class="sp" data-act="editWallet" data-id="${w.id}" style="cursor:pointer"><b>${esc(w.name)}</b>${w.hidden ? ' <span class="mut">(مخفية)</span>' : ''}</div><span class="drag"><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="-1">▲</button><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editWallet" data-id="">+ محفظة جديدة</button></div>
+  <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}" data-act="editCat" data-id="${c.id}" style="cursor:pointer"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button></div>
   <div class="card"><h2>Excel</h2><div class="row"><label class="b pri sp" style="text-align:center">استيراد من Excel<input type="file" accept=".xlsx,.xls" data-chg="importXlsx"></label><button class="b sp" data-act="exportXlsx">تصدير إلى Excel</button></div><div class="mut" style="margin-top:6px">الاستيراد يكرر نفس عمليات الملف بدون تضاعف لو استوردت مرتين. العمليات اللي أضفتها من التطبيق لا تُمس.</div></div>
   <div class="card"><h2>Dropbox</h2>
   <div class="mut">الربط يخلي ملف Excel يتحدث في مجلد Dropbox بعد كل مزامنة، والعمليات بدون نت تنحفظ وتنرفع لما يرجع النت. الدمج تلقائي حسب الوقت وبدون فقدان بيانات.</div>
@@ -192,12 +195,13 @@ function vSettings() {
 
 /* ---------------- الإجراءات ---------------- */
 const actions = {
-  pickMonth: (d) => { ui.month = d.k; render(); },
+  pickMonth: (d) => { const y = window.scrollY; ui.month = d.k; render(); window.scrollTo(0, y); },
   toggleOld: () => { ui.showOld = !ui.showOld; render(); },
-  addType: (d) => { ui.addType = d.t; ui.cat = null; render(); },
+  addType: (d) => { ui.addType = d.t; ui.cat = null; ui.pay = null; ui.payManual = false; render(); },
   pickWallet: (d) => { keepFields(); ui.wallet = d.id; render(); restoreFields(); },
   pickTo: (d) => { keepFields(); ui.toWallet = d.id; render(); restoreFields(); },
-  pickCat: (d) => { keepFields(); ui.cat = d.id; render(); restoreFields(); },
+  pickCat: (d) => { keepFields(); ui.cat = d.id; if (!ui.payManual) ui.pay = (cById(d.id) || {}).kind || 'salary'; render(); restoreFields(); },
+  pickPay: (d) => { keepFields(); ui.pay = d.p; ui.payManual = true; render(); restoreFields(); },
   logMonth: (d, el) => { ui.logMonth = el.value; render(); },
   logQ: (d, el) => { ui.logFilter = el.value.trim(); render(); const q = $('#logQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } },
   salary: (d) => { const cur = S.salaries[d.k] || ''; modal(`<h2>راتب شهر ${d.k}</h2><input id="m_sal" inputmode="decimal" value="${cur}"><div class="row"><button class="b pri sp" data-act="saveSalary" data-k="${d.k}">حفظ</button><button class="b" onclick="closeModal()">إلغاء</button></div>`); },
@@ -207,13 +211,13 @@ const actions = {
     if (!ui.wallet) return toast('اختر المحفظة', true);
     const ts = inputToTs($('#f_ts').value); const note = $('#f_note').value.trim();
     let rec;
-    if (t === 'exp') { if (!ui.cat) return toast('اختر التصنيف', true); const q = parseNum($('#f_qty').value) || 1; rec = { id: Core.uid(), ts, type: 'exp', wallet: ui.wallet, cat: ui.cat, unit: amt, qty: q, amount: Core.round2(amt * q), note }; }
+    if (t === 'exp') { if (!ui.cat) return toast('اختر التصنيف', true); const q = parseNum($('#f_qty').value) || 1; rec = { id: Core.uid(), ts, type: 'exp', pay: ui.pay || (cById(ui.cat) || {}).kind || 'salary', wallet: ui.wallet, cat: ui.cat, unit: amt, qty: q, amount: Core.round2(amt * q), note }; }
     else if (t === 'transfer') { if (!ui.toWallet || ui.toWallet === ui.wallet) return toast('اختر محفظتين مختلفتين', true); rec = { id: Core.uid(), ts, type: 'transfer', wallet: ui.wallet, to: ui.toWallet, amount: amt, fee: parseNum($('#f_fee').value), qty: 1, cat: null, note }; }
     else rec = { id: Core.uid(), ts, type: 'income', wallet: ui.wallet, amount: amt, qty: 1, cat: null, note };
     await putTx(rec);
     const k = Core.monthKey(ts, S.settings.monthStart); const m = Core.monthSummary(S, k);
     const over = m.salary > 0 && m.salaryExp > m.salary;
-    ui.cat = null; ui.month = k; render();
+    ui.cat = null; ui.pay = null; ui.payManual = false; ui.month = k; render();
     toast(over ? `⚠ تم الحفظ — تجاوزت راتب الشهر بمقدار ${fmt(m.salaryExp - m.salary)}` : 'تم الحفظ ✓', over);
   },
   editTx: (d) => {
@@ -221,14 +225,14 @@ const actions = {
     const wOpts = (sel) => wallets(true).map((w) => `<option value="${w.id}" ${w.id === sel ? 'selected' : ''}>${esc(w.name)}</option>`).join('');
     modal(`<h2>تعديل عملية</h2>${t.legacy ? '' : `<label class="f">المحفظة</label><select id="e_w">${wOpts(t.wallet)}</select>`}
     ${t.type === 'transfer' ? `<label class="f">إلى</label><select id="e_to">${wOpts(t.to)}</select><label class="f">الرسوم</label><input id="e_fee" value="${t.fee || 0}" inputmode="decimal">` : ''}
-    ${t.type === 'exp' ? `<label class="f">التصنيف</label><select id="e_c">${cats(true).map((c) => `<option value="${c.id}" ${c.id === t.cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><label class="f">الكمية</label><input id="e_q" value="${t.qty || 1}" inputmode="decimal"><label class="f">السعر</label><input id="e_u" value="${t.unit != null && !isNaN(t.unit) ? t.unit : Core.round2(t.amount / (t.qty || 1))}" inputmode="decimal">` : `<label class="f">المبلغ</label><input id="e_a" value="${t.amount}" inputmode="decimal">`}
+    ${t.type === 'exp' ? `<label class="f">التصنيف</label><select id="e_c">${cats(true).map((c) => `<option value="${c.id}" ${c.id === t.cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><label class="f">الخصم من</label><select id="e_p"><option value="salary" ${(t.pay || (cById(t.cat) || {}).kind) !== 'saving' ? 'selected' : ''}>الراتب</option><option value="saving" ${(t.pay || (cById(t.cat) || {}).kind) === 'saving' ? 'selected' : ''}>التوفير</option></select><label class="f">الكمية</label><input id="e_q" value="${t.qty || 1}" inputmode="decimal"><label class="f">السعر</label><input id="e_u" value="${t.unit != null && !isNaN(t.unit) ? t.unit : Core.round2(t.amount / (t.qty || 1))}" inputmode="decimal">` : `<label class="f">المبلغ</label><input id="e_a" value="${t.amount}" inputmode="decimal">`}
     <label class="f">ملاحظة</label><input id="e_n" value="${esc(t.note || '')}"><label class="f">الوقت</label><input id="e_ts" type="datetime-local" value="${tsToInput(t.ts)}">
     <div class="row"><button class="b pri sp" data-act="saveEdit" data-id="${t.id}">حفظ</button><button class="b dng" data-act="delTx" data-id="${t.id}">حذف</button><button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
   saveEdit: async (d) => {
     const t = Object.assign({}, S.tx.find((x) => x.id === d.id)); const g = (i) => $('#' + i);
     if (g('e_w')) t.wallet = g('e_w').value; if (g('e_to')) { t.to = g('e_to').value; t.fee = parseNum(g('e_fee').value); }
-    if (t.type === 'exp') { t.cat = g('e_c').value; t.qty = parseNum(g('e_q').value) || 1; t.unit = parseNum(g('e_u').value); t.amount = Core.round2(t.unit * t.qty); } else t.amount = parseNum(g('e_a').value);
+    if (t.type === 'exp') { t.cat = g('e_c').value; t.pay = g('e_p').value; t.qty = parseNum(g('e_q').value) || 1; t.unit = parseNum(g('e_u').value); t.amount = Core.round2(t.unit * t.qty); } else t.amount = parseNum(g('e_a').value);
     t.note = g('e_n').value.trim(); t.ts = inputToTs(g('e_ts').value);
     await putTx(t); closeModal(); render(); toast('تم التعديل ✓');
   },
@@ -243,25 +247,27 @@ const actions = {
     <label class="f">الرصيد الحالي (يُحتسب منه أي تغيير لاحق)</label><input id="w_o" value="${d.id ? Core.balances(S)[w.id] : 0}" inputmode="decimal">
     <label class="f">الشعار (يتصغر تلقائياً لمقاس زر المحفظة)</label><div class="row"><div id="w_prev">${walletIcon({ name: w.name || '؟', logo: ui.tmpLogo, color: w.color })}</div><label class="b">اختر صورة<input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" data-act="clearLogo">إزالة</button></div>
     <label class="f"><input type="checkbox" id="w_h" ${w.hidden ? 'checked' : ''}> إخفاء المحفظة</label>
-    <div class="row"><button class="b pri sp" data-act="saveWallet" data-id="${d.id}">حفظ</button><button class="b" onclick="closeModal()">إلغاء</button></div>`);
+    <div class="row"><button class="b pri sp" data-act="saveWallet" data-id="${d.id}">حفظ</button>${d.id ? `<button class="b dng" data-act="delWallet" data-id="${d.id}">حذف</button>` : ''}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
   logoFile: (d, el) => { const f = el.files[0]; if (!f) return; const img = new Image(); const url = URL.createObjectURL(f); img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 96; const x = c.getContext('2d'); const s = Math.min(img.width, img.height); x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 96, 96); ui.tmpLogo = c.toDataURL('image/png'); URL.revokeObjectURL(url); $('#w_prev').innerHTML = walletIcon({ name: '', logo: ui.tmpLogo }); }; img.src = url; },
   clearLogo: () => { ui.tmpLogo = null; $('#w_prev').innerHTML = walletIcon({ name: $('#w_n').value || '؟', logo: null }); },
   saveWallet: async (d) => {
     const name = $('#w_n').value.trim(); if (!name) return toast('اكتب اسم المحفظة', true);
     let w = d.id ? wById(d.id) : null; const wantBal = parseNum($('#w_o').value);
-    if (!w) { w = { id: 'w' + Date.now().toString(36), name, color: '#1f7a4d', logo: null, hidden: false, order: S.wallets.length, opening: 0 }; S.wallets.push(w); }
+    if (!w) { w = { id: 'w' + Date.now().toString(36), name, color: '#1f5fa8', logo: null, hidden: false, order: S.wallets.length, opening: 0 }; S.wallets.push(w); }
     const cur = Core.balances(S)[w.id] || 0; w.opening = Core.round2((w.opening || 0) + (wantBal - cur));
     w.name = name; w.logo = ui.tmpLogo; w.hidden = $('#w_h').checked; touchList(w);
     if (!S.anchorTs) S.anchorTs = 1; await touchSettings(); closeModal(); render();
   },
+  delWallet: async (d) => { const w = wById(d.id); if (!w || !confirm(`حذف المحفظة «${w.name}»؟\nستختفي من القوائم وتبقى عملياتها السابقة محفوظة، وتقدر تعيدها من التعديل.`)) return; w.hidden = true; touchList(w); await touchSettings(); closeModal(); render(); toast('تم حذف (إخفاء) المحفظة'); },
+  delCat: async (d) => { const c = cById(d.id); if (!c || !confirm(`حذف التصنيف «${c.name}»؟\nسيختفي من القوائم وتبقى عملياته السابقة محفوظة، وتقدر تعيده من التعديل.`)) return; c.hidden = true; touchList(c); await touchSettings(); closeModal(); render(); toast('تم حذف (إخفاء) التصنيف'); },
   moveW: async (d) => { const l = wallets(true); const i = l.findIndex((w) => w.id === d.id), j = i + +d.d; if (j < 0 || j >= l.length) return; [l[i].order, l[j].order] = [l[j].order, l[i].order]; touchList(l[i]); touchList(l[j]); await touchSettings(); render(); },
   editCat: (d) => {
     const c = d.id ? cById(d.id) : { name: '', kind: 'salary', hidden: false, logo: null };
     ui.tmpLogo = c.logo || null;
     modal(`<h2>${d.id ? 'تعديل تصنيف' : 'تصنيف جديد'}</h2><label class="f">الاسم</label><input id="c_n" value="${esc(c.name)}"><label class="f">يُحسب على</label><select id="c_k"><option value="salary" ${c.kind === 'salary' ? 'selected' : ''}>راتب نفس الشهر</option><option value="saving" ${c.kind === 'saving' ? 'selected' : ''}>التوفير</option></select>
     <label class="f">الشعار (اختياري — يتصغر تلقائياً)</label><div class="row"><div id="w_prev">${walletIcon({ name: c.name || '؟', logo: ui.tmpLogo, color: '#6b736e' })}</div><label class="b">اختر صورة<input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" data-act="clearLogo">إزالة</button></div>
-    <label class="f"><input type="checkbox" id="c_h" ${c.hidden ? 'checked' : ''}> إخفاء (حذف من القائمة مع بقاء العمليات)</label><div class="row"><button class="b pri sp" data-act="saveCat" data-id="${d.id}">حفظ</button><button class="b" onclick="closeModal()">إلغاء</button></div>`);
+    <label class="f"><input type="checkbox" id="c_h" ${c.hidden ? 'checked' : ''}> إخفاء (حذف من القائمة مع بقاء العمليات)</label><div class="row"><button class="b pri sp" data-act="saveCat" data-id="${d.id}">حفظ</button>${d.id ? `<button class="b dng" data-act="delCat" data-id="${d.id}">حذف</button>` : ''}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
   saveCat: async (d) => {
     const name = $('#c_n').value.trim(); if (!name) return toast('اكتب الاسم', true);

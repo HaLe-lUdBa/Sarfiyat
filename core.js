@@ -60,7 +60,7 @@
   Core.DEFAULT_CATS = ['الشقة', 'الكهرب', 'الغاز', 'الماء', 'الادخار', 'نت', 'القرض', 'بنزين', 'بنزين باجيرو', 'بنزين هافال', 'بنزين سزوكي', 'الاغراض', 'اغراض السفر', 'أغراض لأهلي', 'كماليات', 'ترفيه', 'زوجتي', 'بنتي', 'حلويات', 'مطاعم', 'الفواتير', 'الدوام', 'مخالفات', 'طلبات النت', 'الشحن', 'طب', 'الصيدلية', 'توصيل', 'صيانة', 'السيارة', 'ادوات للشاليه', 'الشالية', 'الاسهم', 'سلف', 'احتياط', 'غير مصنف'];
   Core.normCat = (c) => { c = str(c).replace(/\s+/g, ' '); if (c === 'الشقه') return 'الشقة'; if (c === 'السياره') return 'السيارة'; return c; };
   Core.DEFAULT_WALLETS = [
-    { id: 'w1', code: 1, name: 'البلاد', color: '#1f7a4d' },
+    { id: 'w1', code: 1, name: 'البلاد', color: '#1f5fa8' },
     { id: 'w2', code: 2, name: 'الاستثمار', color: '#2c5fa8' },
     { id: 'w3', code: 3, name: 'كاش', color: '#8a6d1d' },
     { id: 'w4', code: 4, name: 'الراجحي', color: '#a83232' },
@@ -249,7 +249,7 @@
       if (Core.monthKey(t.ts, ms) !== key) return;
       if (t.type === 'exp') {
         byCat[t.cat] = (byCat[t.cat] || 0) + t.amount;
-        if (catKind[t.cat] === 'saving') savingExp += t.amount; else salaryExp += t.amount;
+        if ((t.pay || catKind[t.cat]) === 'saving') savingExp += t.amount; else salaryExp += t.amount;
       } else if (t.type === 'transfer') {
         if (t.fee) { fees += t.fee; salaryExp += t.fee; }
       } else if (t.type === 'income') income += t.amount;
