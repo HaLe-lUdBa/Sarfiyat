@@ -55,6 +55,8 @@ const wallets = (all) => S.wallets.filter((w) => all || !w.hidden).sort((a, b) =
 const cats = (all) => S.categories.filter((c) => all || !c.hidden).sort((a, b) => a.order - b.order);
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
+const APP_VERSION = '2';
+const catColor = (id) => { const c = S.categories.find((x) => x.id === id); return c && c.color ? c.color : null; };
 const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
 function modal(html) { const m = $('#modal'); m.innerHTML = `<div class="sheet">${html}</div>`; m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }
@@ -94,9 +96,9 @@ function vHome() {
   const sums = {}; visible.forEach((k) => (sums[k] = Core.monthSummary(S, k)));
   const usedCats = cs.filter((c) => visible.some((k) => sums[k].byCat[c.id]));
   const years = {}; visible.forEach((k) => (years[k.slice(0, 4)] = years[k.slice(0, 4)] || []).push(k));
-  const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th>${esc(c.name)}</th>`).join('')}<th>المصروف</th><th>المتبقي</th><th>الراتب</th><th>نسبة التوفير</th></tr>`;
-  const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="h" data-yr="${y}" ${isOpen('h', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td><b>${k}</b></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}">${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td><b>${fmt(s.salaryExp)}</b></td><td class="${s.remaining < 0 ? 'bad' : 'good'}">${s.salary ? fmt(s.remaining) : ''}</td><td>${s.salary ? fmt(s.salary) : ''}</td><td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
-  const top = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, v]) => `<span class="tag ${cById(id) && cById(id).kind === 'saving' ? 'sv' : ''}">${esc(cById(id) ? cById(id).name : '؟')} ${fmt(v)}</span>`).join(' ');
+  const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th ${c.color ? `style="box-shadow:inset 0 4px 0 ${c.color}"` : ''}>${esc(c.name)}</th>`).join('')}<th>المصروف</th><th>المتبقي</th><th>الراتب</th><th>نسبة التوفير</th></tr>`;
+  const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="h" data-yr="${y}" ${isOpen('h', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td><b>${k}</b></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}" ${c.color ? `style="background:${c.color}22"` : ''}>${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td><b>${fmt(s.salaryExp)}</b></td><td class="${s.remaining < 0 ? 'bad' : 'good'}">${s.salary ? fmt(s.remaining) : ''}</td><td>${s.salary ? fmt(s.salary) : ''}</td><td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
+  const top = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, v]) => `<span class="tag ${cById(id) && cById(id).kind === 'saving' ? 'sv' : ''}" ${catColor(id) ? `style="background:${catColor(id)}33;color:${catColor(id)}"` : ''}>${esc(cById(id) ? cById(id).name : '؟')} ${fmt(v)}</span>`).join(' ');
   return `${over ? `<div class="alert">⚠ تنبيه: صرفت ${fmt(m.salaryExp)} وهذا أكثر من راتب هذا الشهر (${fmt(m.salary)}) بزيادة ${fmt(m.salaryExp - m.salary)}</div>` : ''}
   <div class="card"><div class="row"><h2 class="sp"><b>${key}</b></h2><button class="b sm" data-act="salary" data-k="${key}">الراتب: ${m.salary ? fmt(m.salary) : 'حدد'}</button></div>
   <div class="row"><div class="sp"><div class="mut">مصروف من الراتب</div><div class="big ${over ? 'bad' : ''}">${fmt(m.salaryExp)}</div></div>
@@ -118,7 +120,7 @@ function vAdd() {
   <div class="card">
   <h3 style="margin-top:0">${t === 'transfer' ? 'من محفظة' : t === 'income' ? 'تدخل في محفظة' : 'ادفع من محفظة'}</h3>${walBtns(ui.wallet, 'pickWallet')}
   ${t === 'transfer' ? `<h3>إلى محفظة</h3>${walBtns(ui.toWallet, 'pickTo')}` : ''}
-  ${t === 'exp' ? `<h3>الخصم من</h3><div class="src"><button class="b ${(ui.pay || 'salary') === 'salary' ? 'pri' : ''}" data-act="pickPay" data-p="salary">الراتب</button><button class="b ${ui.pay === 'saving' ? 'pri' : ''}" data-act="pickPay" data-p="saving">التوفير</button></div><h3>التصنيف</h3><div class="cats">${cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join('')}</div>` : ''}
+  ${t === 'exp' ? `<h3>الخصم من</h3><div class="src"><button class="b ${(ui.pay || 'salary') === 'salary' ? 'pri' : ''}" data-act="pickPay" data-p="salary">الراتب</button><button class="b ${ui.pay === 'saving' ? 'pri' : ''}" data-act="pickPay" data-p="saving">التوفير</button></div><h3>التصنيف</h3><div class="cats">${cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" ${c.color ? `style="border-color:${c.color};${ui.cat === c.id ? `background:${c.color};color:#fff` : `background:${c.color}1f`}"` : ''} data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join('')}</div>` : ''}
   <div class="row"><div class="sp"><label class="f">${t === 'exp' ? 'السعر' : 'المبلغ'}</label><input id="f_amt" inputmode="decimal" placeholder="0"></div>
   ${t === 'exp' ? `<div style="width:90px"><label class="f">الكمية</label><input id="f_qty" inputmode="decimal" value="1"></div>` : ''}
   ${t === 'transfer' ? `<div style="width:120px"><label class="f">+ رسوم</label><input id="f_fee" inputmode="decimal" placeholder="0"></div>` : ''}</div>
@@ -145,7 +147,7 @@ function itemHtml(t) {
   let title, tag, amt, cls = '';
   if (t.type === 'transfer') { title = `${esc(w ? w.name : '؟')} ← ${esc(w2 ? w2.name : '؟')}`; tag = '<span class="tag tr">تحويل</span>'; amt = fmt(t.amount) + (t.fee ? ` <span class="mut">(+${fmt(t.fee)})</span>` : ''); }
   else if (t.type === 'income') { title = 'دخل'; tag = `<span class="tag">${esc(w ? w.name : '')}</span>`; amt = '+' + fmt(t.amount); cls = 'good'; }
-  else { title = esc(c ? c.name : '؟'); tag = `<span class="tag ${c && c.kind === 'saving' ? 'sv' : ''}">${esc(t.legacy ? 'قديم' : w ? w.name : '')}</span>`; amt = fmt(t.amount); }
+  else { title = (c && c.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color};margin-inline-end:6px"></span>` : '') + esc(c ? c.name : '؟'); tag = `<span class="tag ${c && c.kind === 'saving' ? 'sv' : ''}">${esc(t.legacy ? 'قديم' : w ? w.name : '')}</span>`; amt = fmt(t.amount); }
   return `<div class="item" data-act="editTx" data-id="${esc(t.id)}"><div class="sp"><div><b>${title}</b> ${tag}</div><div class="mut">${Core.fmtTime(t.ts)}${t.qty && t.qty !== 1 ? ' · ×' + t.qty : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></div><div class="amt ${cls}">${amt}</div></div>`;
 }
 
@@ -181,7 +183,7 @@ function vSettings() {
   <label class="f">المظهر</label><select data-chg="setTheme">${[['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'غامق']].map(([v, l]) => `<option value="${v}" ${S.settings.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
   <label class="f">إخفاء الأشهر قبل تاريخ (لا يحذفها)</label><input type="date" value="${S.settings.hideBefore ? Core.fmtDate(S.settings.hideBefore).replace(/\//g, '-') : ''}" data-chg="setHide"></div>
   <div class="card"><h2>المحافظ</h2>${wallets(true).map((w, i) => `<div class="item">${walletIcon(w, 'mini')}<div class="sp" data-act="editWallet" data-id="${w.id}" style="cursor:pointer"><b>${esc(w.name)}</b>${w.hidden ? ' <span class="mut">(مخفية)</span>' : ''}</div><span class="drag"><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="-1">▲</button><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editWallet" data-id="">+ محفظة جديدة</button></div>
-  <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}" data-act="editCat" data-id="${c.id}" style="cursor:pointer"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button></div>
+  <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: c.color || '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}" data-act="editCat" data-id="${c.id}" style="cursor:pointer"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button></div>
   <div class="card"><h2>Excel</h2><div class="row"><label class="b pri sp" style="text-align:center">استيراد من Excel<input type="file" accept=".xlsx,.xls" data-chg="importXlsx"></label><button class="b sp" data-act="exportXlsx">تصدير إلى Excel</button></div><div class="mut" style="margin-top:6px">الاستيراد يكرر نفس عمليات الملف بدون تضاعف لو استوردت مرتين. العمليات اللي أضفتها من التطبيق لا تُمس.</div></div>
   <div class="card"><h2>Dropbox</h2>
   <div class="mut">الربط يخلي ملف Excel يتحدث في مجلد Dropbox بعد كل مزامنة، والعمليات بدون نت تنحفظ وتنرفع لما يرجع النت. الدمج تلقائي حسب الوقت وبدون فقدان بيانات.</div>
@@ -190,7 +192,8 @@ function vSettings() {
   <div class="mut">Redirect URI المطلوب إضافته في إعدادات تطبيق Dropbox: <b dir="ltr">${esc(location.origin + location.pathname)}</b></div>
   <div class="row" style="margin-top:8px">${d.token ? `<button class="b pri" data-act="syncNow">مزامنة الآن</button><button class="b dng" data-act="dbLogout">فصل</button>` : `<button class="b pri" data-act="dbLogin">ربط Dropbox</button>`}</div>
   <div class="mut" id="syncInfo">${d.last ? 'آخر مزامنة: ' + new Date(d.last).toLocaleString('ar') : ''}</div></div>
-  <div class="card"><h2>نسخة احتياطية</h2><div class="row"><button class="b sp" data-act="backupJson">حفظ نسخة JSON</button><label class="b sp" style="text-align:center">استرجاع من JSON<input type="file" accept=".json" data-chg="restoreJson"></label></div></div>`;
+  <div class="card"><h2>نسخة احتياطية</h2><div class="row"><button class="b sp" data-act="backupJson">حفظ نسخة JSON</button><label class="b sp" style="text-align:center">استرجاع من JSON<input type="file" accept=".json" data-chg="restoreJson"></label></div></div>
+  <div class="mut" style="text-align:center;padding:8px">تطبيق الصرفيات — الإصدار ${APP_VERSION}</div>`;
 }
 
 /* ---------------- الإجراءات ---------------- */
@@ -264,15 +267,18 @@ const actions = {
   moveW: async (d) => { const l = wallets(true); const i = l.findIndex((w) => w.id === d.id), j = i + +d.d; if (j < 0 || j >= l.length) return; [l[i].order, l[j].order] = [l[j].order, l[i].order]; touchList(l[i]); touchList(l[j]); await touchSettings(); render(); },
   editCat: (d) => {
     const c = d.id ? cById(d.id) : { name: '', kind: 'salary', hidden: false, logo: null };
-    ui.tmpLogo = c.logo || null;
+    ui.tmpLogo = c.logo || null; ui.tmpColor = c.color || null;
     modal(`<h2>${d.id ? 'تعديل تصنيف' : 'تصنيف جديد'}</h2><label class="f">الاسم</label><input id="c_n" value="${esc(c.name)}"><label class="f">يُحسب على</label><select id="c_k"><option value="salary" ${c.kind === 'salary' ? 'selected' : ''}>راتب نفس الشهر</option><option value="saving" ${c.kind === 'saving' ? 'selected' : ''}>التوفير</option></select>
-    <label class="f">الشعار (اختياري — يتصغر تلقائياً)</label><div class="row"><div id="w_prev">${walletIcon({ name: c.name || '؟', logo: ui.tmpLogo, color: '#6b736e' })}</div><label class="b">اختر صورة<input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" data-act="clearLogo">إزالة</button></div>
+    <label class="f">اللون (يظهر في الرئيسية والإضافة والسجل)</label><div class="row"><input type="color" id="c_col" value="${c.color || '#3b82d6'}" data-chg="catColor" style="width:64px;height:44px;padding:2px"><span id="c_colTxt" class="mut">${c.color ? c.color : 'بدون لون'}</span><button class="b sm" data-act="noColor">بدون لون</button></div>
+    <label class="f">الشعار (اختياري — يتصغر تلقائياً)</label><div class="row"><div id="w_prev">${walletIcon({ name: c.name || '؟', logo: ui.tmpLogo, color: c.color || '#6b736e' })}</div><label class="b">اختر صورة<input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" data-act="clearLogo">إزالة</button></div>
     <label class="f"><input type="checkbox" id="c_h" ${c.hidden ? 'checked' : ''}> إخفاء (حذف من القائمة مع بقاء العمليات)</label><div class="row"><button class="b pri sp" data-act="saveCat" data-id="${d.id}">حفظ</button>${d.id ? `<button class="b dng" data-act="delCat" data-id="${d.id}">حذف</button>` : ''}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
+  catColor: (d, el) => { ui.tmpColor = el.value; $('#c_colTxt').textContent = el.value; },
+  noColor: () => { ui.tmpColor = null; $('#c_colTxt').textContent = 'بدون لون'; },
   saveCat: async (d) => {
     const name = $('#c_n').value.trim(); if (!name) return toast('اكتب الاسم', true);
     let c = d.id ? cById(d.id) : null; if (!c) { c = { id: 'c' + Date.now().toString(36), order: S.categories.length }; S.categories.push(c); }
-    c.name = name; c.kind = $('#c_k').value; c.hidden = $('#c_h').checked; c.logo = ui.tmpLogo; touchList(c); await touchSettings(); closeModal(); render();
+    c.name = name; c.kind = $('#c_k').value; c.hidden = $('#c_h').checked; c.logo = ui.tmpLogo; c.color = ui.tmpColor; touchList(c); await touchSettings(); closeModal(); render();
   },
   moveC: async (d) => { const l = cats(true); const i = l.findIndex((c) => c.id === d.id), j = i + +d.d; if (j < 0 || j >= l.length) return; [l[i].order, l[j].order] = [l[j].order, l[i].order]; touchList(l[i]); touchList(l[j]); await touchSettings(); render(); },
   importXlsx: async (d, el) => {
