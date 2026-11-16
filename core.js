@@ -213,6 +213,72 @@
     return { wallets, categories: cats, tx: tx.concat(legacy), salaries, anchorTs, log };
   };
 
+
+  // ---------- قراءة رسائل البنوك (SMS) ----------
+  Core.BANKS = { inv: 'الاستثمار', bld: 'البلاد', rjh: 'الراجحي', stc: 'stc bank' };
+  Core.parseSms = function (raw, nowTs) {
+    const t = String(raw || '').replace(/[؜‎‏‪-‮]/g, '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.').replace(/\r/g, '');
+    const lines = t.split('\n').map((s) => s.trim()).filter(Boolean);
+    const full = lines.join('\n');
+    const out = { bank: null, kind: 'exp', amount: null, fee: 0, cur: 'SAR', foreign: false, note: '', ts: null, ok: false };
+    if (!lines.length) return out;
+    // 1) البنك
+    const sc = { inv: 0, bld: 0, rjh: 0, stc: 0 };
+    const T = (re, b, w) => { if (re.test(full)) sc[b] += w; };
+    T(/مدى باي|مفوتر|^لدى\s*:|المصرف|سداد فاتورة|شراء\s*(POS|انترنت|عبر)|بSAR|(?:SAR|USD)\s*\d/m, 'inv', 2);
+    T(/آيبان|^عبر\s*:|حوالة واردة راتب|حوالة محلية صادرة مقبولة|Saudi Central Bank|حساب المرسل|^مبلغ\s*:\s*[\d.,]+\s*SAR/m, 'bld', 3);
+    T(/بـ\s*SR|قسط|المبلغ المتبقي|محلية واردة بـ|داخلية صادرة بـ\s*SR/, 'rjh', 3);
+    T(/ر\.س|\d\s*SR\b|عملية انترنت|^ب\s*:/m, 'stc', 3);
+    T(/stc/i, 'stc', 1);
+    let best = null, bs = 0; Object.keys(sc).forEach((k) => { if (sc[k] > bs) { bs = sc[k]; best = k; } });
+    out.bank = best;
+    // 2) النوع
+    const head = lines.slice(0, 2).join(' ');
+    if (/واردة|راتب|إيداع|ايداع/.test(head)) out.kind = 'income';
+    else if (/حوالة/.test(head)) out.kind = 'transfer';
+    // 3) المبلغ والرسوم والتاجر
+    const isSar = (c) => !c || /^(SAR|SR|ر\.س)$/i.test(c);
+    const num = (s) => parseFloat(String(s).replace(/,/g, ''));
+    let merchant = '';
+    for (const line of lines) {
+      if (/^(المبلغ المتبقي|رصيد)/.test(line)) continue;
+      let m;
+      if (/^(?:الرسوم|رسوم)/.test(line)) { m = line.match(/([\d][\d,]*\.?\d*)/); if (m) out.fee = num(m[1]); continue; }
+      if (out.amount == null) {
+        let cur = null, v = null;
+        if ((m = line.match(/^(?:المبلغ|مبلغ|القسط)\s*:?\s*(?:([A-Za-z]{2,3})\s*)?([\d][\d,]*\.?\d*)\s*([A-Za-z]{2,3}|ر\.س)?\s*$/))) { cur = m[1] || m[3]; v = m[2]; }
+        else if ((m = line.match(/بـ\s*:?\s*(SAR|SR)\s*([\d][\d,]*\.?\d*)/i))) { cur = m[1]; v = m[2]; }
+        else if ((m = line.match(/^بـ?\s*(:)?\s*(?:([A-Za-z]{3})\s*)?([\d][\d,]*\.?\d*)\s*([A-Za-z]{2,3}|ر\.س)?\s*$/)) && (m[1] || m[2] || m[4])) { cur = m[2] || m[4]; v = m[3]; }
+        else if ((m = line.match(/^([\d][\d,]*\.?\d*)\s*(SR|SAR|ر\.س)$/i))) { cur = m[2]; v = m[1]; }
+        if (v != null) { out.amount = num(v); out.cur = (cur || 'SAR').toUpperCase(); out.foreign = !isSar(cur); }
+      }
+      if (!merchant) {
+        if ((m = line.match(/^لدى\s*:\s*(.+)$/))) merchant = m[1];
+        else if ((m = line.match(/^مفوتر\s*:\s*(?:\d+\s*)?(.+)$/))) merchant = 'فاتورة ' + m[1];
+        else if ((m = line.match(/^خصم\s*:\s*(.+)$/))) merchant = m[1];
+      }
+    }
+    if (!merchant && out.kind === 'exp') {
+      for (const line of lines.slice(1)) { const m = line.match(/^من\s*:?\s*([^*X\d:].*)$/); if (m && !/^[A-Z]{3}$/.test(m[1].trim())) { merchant = m[1]; break; } }
+    }
+    merchant = merchant.replace(/\*+/g, '').replace(/\s+/g, ' ').trim();
+    out.note = merchant || (out.kind === 'exp' ? lines[0] : '');
+    // 4) التاريخ (ما كان واضحاً فقط)
+    const now = nowTs || Core.nowLocalTs(); const cy = Core.parts(now).y;
+    const mk = (y, mo, d, h, mi) => { if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59) return null; const ts = Date.UTC(y, mo - 1, d, h, mi); return ts > now + DAY ? null : ts; };
+    let m;
+    if ((m = full.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\s+(\d{1,2}):(\d{1,2})/))) out.ts = mk(+m[1], +m[2], +m[3], +m[4], +m[5]);
+    else if ((m = full.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})\s+(\d{1,2}):(\d{1,2})/))) out.ts = mk(+m[3], +m[2], +m[1], +m[4], +m[5]);
+    else if ((m = full.match(/(\d{1,2})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2})/))) {
+      const a = +m[1], b = +m[2], c2 = +m[3], yy = cy % 100;
+      const o1 = c2 === yy ? mk(2000 + c2, b, a, +m[4], +m[5]) : null; // يوم/شهر/سنة
+      const o2 = a === yy ? mk(2000 + a, b, c2, +m[4], +m[5]) : null; // سنة/شهر/يوم
+      out.ts = o1 || o2;
+    } else if ((m = full.match(/(?:ب|في)\s*:?\s*(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{1,2})/))) out.ts = mk(cy, +m[1], +m[2], +m[3], +m[4]);
+    out.ok = out.amount != null && !isNaN(out.amount);
+    return out;
+  };
+
   // ---------- الحسابات ----------
   const live = (t) => !t.del;
   // أثر العملية على محفظة

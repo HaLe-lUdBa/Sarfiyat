@@ -55,7 +55,7 @@ const wallets = (all) => S.wallets.filter((w) => all || !w.hidden).sort((a, b) =
 const cats = (all) => S.categories.filter((c) => all || !c.hidden).sort((a, b) => a.order - b.order);
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
-const APP_VERSION = '2';
+const APP_VERSION = '3';
 const catColor = (id) => { const c = S.categories.find((x) => x.id === id); return c && c.color ? c.color : null; };
 const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
@@ -70,7 +70,7 @@ function applyTheme() { const t = S.settings.theme; if (t === 'auto') document.d
 ui.open = { h: {}, w: {} };
 const isOpen = (sc, y, i) => (ui.open[sc][y] !== undefined ? ui.open[sc][y] : i === 0);
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName === 'DETAILS' && d.dataset.yr) ui.open[d.dataset.sc][d.dataset.yr] = d.open; }, true);
-function go(tab) { ui.tab = tab; render(); window.scrollTo(0, 0); }
+function go(tab) { if (tab !== 'add') { ui.prefill = null; ui.sms = null; ui.smsHash = null; } ui.tab = tab; render(); window.scrollTo(0, 0); }
 function render() {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === ui.tab));
   const v = $('#view');
@@ -96,7 +96,7 @@ function vHome() {
   const sums = {}; visible.forEach((k) => (sums[k] = Core.monthSummary(S, k)));
   const usedCats = cs.filter((c) => visible.some((k) => sums[k].byCat[c.id]));
   const years = {}; visible.forEach((k) => (years[k.slice(0, 4)] = years[k.slice(0, 4)] || []).push(k));
-  const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th ${c.color ? `style="box-shadow:inset 0 4px 0 ${c.color}"` : ''}>${esc(c.name)}</th>`).join('')}<th>المصروف</th><th>المتبقي</th><th>الراتب</th><th>نسبة التوفير</th></tr>`;
+  const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th ${c.color ? `style="box-shadow:inset 0 4px 0 ${c.color}"` : ''}>${esc(c.name)}${c.logo ? `<img src="${c.logo}" style="width:24px;height:24px;border-radius:6px;display:block;margin:4px auto 0">` : ''}</th>`).join('')}<th>المصروف</th><th>المتبقي</th><th>الراتب</th><th>نسبة التوفير</th></tr>`;
   const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="h" data-yr="${y}" ${isOpen('h', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td><b>${k}</b></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}" ${c.color ? `style="background:${c.color}22"` : ''}>${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td><b>${fmt(s.salaryExp)}</b></td><td class="${s.remaining < 0 ? 'bad' : 'good'}">${s.salary ? fmt(s.remaining) : ''}</td><td>${s.salary ? fmt(s.salary) : ''}</td><td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
   const top = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, v]) => `<span class="tag ${cById(id) && cById(id).kind === 'saving' ? 'sv' : ''}" ${catColor(id) ? `style="background:${catColor(id)}33;color:${catColor(id)}"` : ''}>${esc(cById(id) ? cById(id).name : '؟')} ${fmt(v)}</span>`).join(' ');
   return `${over ? `<div class="alert">⚠ تنبيه: صرفت ${fmt(m.salaryExp)} وهذا أكثر من راتب هذا الشهر (${fmt(m.salary)}) بزيادة ${fmt(m.salaryExp - m.salary)}</div>` : ''}
@@ -111,22 +111,49 @@ function vHome() {
 }
 
 /* ---------------- الإضافة ---------------- */
+function smsBanner() {
+  const r = ui.sms; const kinds = { exp: 'مصروف', income: 'دخل', transfer: 'تحويل' };
+  const warn = [];
+  if (!r.bank) warn.push('ما قدرت أحدد البنك، اختر المحفظة بنفسك.');
+  else if (!ui.smsWalletFound) warn.push(`ما لقيت محفظة لبنك ${Core.BANKS[r.bank]}، اختر المحفظة (أو أضف محفظة جديدة من الإعدادات وحدد نوع رسائلها).`);
+  if (r.foreign) warn.push(`المبلغ بعملة ${esc(r.cur)} (${fmt(r.amount)})، اكتب المبلغ بالريال بعد التحويل.`);
+  else if (!r.ok) warn.push('ما لقيت مبلغاً في الرسالة، اكتبه بنفسك.');
+  if (r.kind === 'transfer') warn.push('تحويل: اختر المحفظة اللي راح تدخل فيها المبلغ.');
+  if (ui.smsDup) warn.push('⚠ هذي الرسالة سبق تسجيلها، تأكد ما تكررها.');
+  return `<div class="card" style="border-color:var(--acc)"><b>📩 رسالة ${r.bank ? 'من بنك ' + Core.BANKS[r.bank] : ''}</b> — ${kinds[r.kind]}${r.ok && !r.foreign ? ' ' + fmt(r.amount) : ''}${warn.length ? `<div class="mut" style="margin-top:6px">${warn.map((w) => '• ' + w).join('<br>')}</div>` : '<div class="mut">اختر التصنيف ثم اضغط حفظ.</div>'}</div>`;
+}
+const smsHash = (t) => { let h = 5381; const x = String(t).replace(/\s+/g, ' ').trim(); for (let i = 0; i < x.length; i++) h = ((h << 5) + h + x.charCodeAt(i)) | 0; return String(h); };
+const BANK_KEYS = { inv: ['استثمار'], bld: ['بلاد'], rjh: ['راجح'], stc: ['stc'] };
+const walletForBank = (b) => b ? wallets().find((w) => w.sms === b) || wallets().find((w) => !w.sms && BANK_KEYS[b].some((k) => w.name.toLowerCase().includes(k))) : null;
+function handleSms(text) {
+  const r = Core.parseSms(text, Core.nowLocalTs()); const h = smsHash(text);
+  ui.sms = r; ui.smsHash = h; ui.smsDup = (S.settings.smsSeen || []).includes(h);
+  ui.addType = r.kind; ui.cat = null; ui.pay = null; ui.payManual = false;
+  const w = walletForBank(r.bank); ui.smsWalletFound = !!w; if (w) ui.wallet = w.id;
+  ui.toWallet = null;
+  ui.prefill = { amt: r.ok && !r.foreign ? String(r.amount) : '', fee: r.fee ? String(r.fee) : '', note: r.note + (r.foreign ? ` (${r.cur} ${r.amount})` : ''), ts: r.ts || 0 };
+  // اقتراح التصنيف من آخر عملية بنفس الملاحظة
+  if (r.kind === 'exp' && r.note) { const prev = S.tx.filter((t) => !t.del && t.type === 'exp' && t.note && t.note === r.note).sort((a, b) => b.ts - a.ts)[0]; if (prev && cById(prev.cat) && !cById(prev.cat).hidden) { ui.cat = prev.cat; ui.pay = prev.pay || cById(prev.cat).kind; } }
+  ui.smsOpen = false; go('add');
+}
 function vAdd() {
   const ws = wallets(); if (!ui.wallet || !wById(ui.wallet)) ui.wallet = ws[0] && ws[0].id;
   if (ui.addType === 'transfer' && (!ui.toWallet || ui.toWallet === ui.wallet)) ui.toWallet = (ws.find((w) => w.id !== ui.wallet) || {}).id;
   const t = ui.addType;
   const walBtns = (sel, act) => `<div class="wal">${ws.map((w) => `<button class="wb ${sel === w.id ? 'on' : ''}" data-act="${act}" data-id="${w.id}">${walletIcon(w)}<span>${esc(w.name)}</span><span class="mut">${fmt(Core.balances(S)[w.id])}</span></button>`).join('')}</div>`;
-  return `<div class="seg"><button class="${t === 'exp' ? 'on' : ''}" data-act="addType" data-t="exp">مصروف</button><button class="${t === 'transfer' ? 'on' : ''}" data-act="addType" data-t="transfer">تحويل</button><button class="${t === 'income' ? 'on' : ''}" data-act="addType" data-t="income">دخل</button></div>
+  const pf = ui.prefill || {};
+  const smsBox = `${ui.sms ? smsBanner() : ''}<details class="card" ${ui.smsOpen ? 'open' : ''}><summary>📩 لصق نص رسالة البنك</summary><textarea id="sms_in" rows="4" placeholder="الصق نص الرسالة هنا"></textarea><button class="b pri" data-act="parseSms">قراءة الرسالة</button></details>`;
+  return `${smsBox}<div class="seg"><button class="${t === 'exp' ? 'on' : ''}" data-act="addType" data-t="exp">مصروف</button><button class="${t === 'transfer' ? 'on' : ''}" data-act="addType" data-t="transfer">تحويل</button><button class="${t === 'income' ? 'on' : ''}" data-act="addType" data-t="income">دخل</button></div>
   <div class="card">
   <h3 style="margin-top:0">${t === 'transfer' ? 'من محفظة' : t === 'income' ? 'تدخل في محفظة' : 'ادفع من محفظة'}</h3>${walBtns(ui.wallet, 'pickWallet')}
   ${t === 'transfer' ? `<h3>إلى محفظة</h3>${walBtns(ui.toWallet, 'pickTo')}` : ''}
   ${t === 'exp' ? `<h3>الخصم من</h3><div class="src"><button class="b ${(ui.pay || 'salary') === 'salary' ? 'pri' : ''}" data-act="pickPay" data-p="salary">الراتب</button><button class="b ${ui.pay === 'saving' ? 'pri' : ''}" data-act="pickPay" data-p="saving">التوفير</button></div><h3>التصنيف</h3><div class="cats">${cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" ${c.color ? `style="border-color:${c.color};${ui.cat === c.id ? `background:${c.color};color:#fff` : `background:${c.color}1f`}"` : ''} data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join('')}</div>` : ''}
-  <div class="row"><div class="sp"><label class="f">${t === 'exp' ? 'السعر' : 'المبلغ'}</label><input id="f_amt" inputmode="decimal" placeholder="0"></div>
+  <div class="row"><div class="sp"><label class="f">${t === 'exp' ? 'السعر' : 'المبلغ'}</label><input id="f_amt" inputmode="decimal" placeholder="0" value="${esc(pf.amt || '')}"></div>
   ${t === 'exp' ? `<div style="width:90px"><label class="f">الكمية</label><input id="f_qty" inputmode="decimal" value="1"></div>` : ''}
-  ${t === 'transfer' ? `<div style="width:120px"><label class="f">+ رسوم</label><input id="f_fee" inputmode="decimal" placeholder="0"></div>` : ''}</div>
+  ${t === 'transfer' ? `<div style="width:120px"><label class="f">+ رسوم</label><input id="f_fee" inputmode="decimal" placeholder="0" value="${esc(pf.fee || '')}"></div>` : ''}</div>
   ${t === 'exp' ? `<div class="mut" id="totalHint"></div>` : ''}
-  <label class="f">ملاحظة (اختياري)</label><input id="f_note" placeholder="${t === 'income' ? 'راتب / مكافأة / استرجاع…' : 'مثال: فطور'}">
-  <label class="f">الوقت والتاريخ (تلقائي الآن — عدّله لو تبي)</label><input id="f_ts" type="datetime-local" value="${tsToInput(Core.nowLocalTs())}">
+  <label class="f">ملاحظة (اختياري)</label><input id="f_note" placeholder="${t === 'income' ? 'راتب / مكافأة / استرجاع…' : 'مثال: فطور'}" value="${esc(pf.note || '')}">
+  <label class="f">الوقت والتاريخ (تلقائي الآن — عدّله لو تبي)</label><input id="f_ts" type="datetime-local" value="${tsToInput(pf.ts || Core.nowLocalTs())}">
   <button class="b pri" style="width:100%;padding:14px" data-act="saveNew">حفظ</button></div>`;
 }
 document.addEventListener('input', (e) => {
@@ -147,7 +174,7 @@ function itemHtml(t) {
   let title, tag, amt, cls = '';
   if (t.type === 'transfer') { title = `${esc(w ? w.name : '؟')} ← ${esc(w2 ? w2.name : '؟')}`; tag = '<span class="tag tr">تحويل</span>'; amt = fmt(t.amount) + (t.fee ? ` <span class="mut">(+${fmt(t.fee)})</span>` : ''); }
   else if (t.type === 'income') { title = 'دخل'; tag = `<span class="tag">${esc(w ? w.name : '')}</span>`; amt = '+' + fmt(t.amount); cls = 'good'; }
-  else { title = (c && c.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color};margin-inline-end:6px"></span>` : '') + esc(c ? c.name : '؟'); tag = `<span class="tag ${c && c.kind === 'saving' ? 'sv' : ''}">${esc(t.legacy ? 'قديم' : w ? w.name : '')}</span>`; amt = fmt(t.amount); }
+  else { title = (c && c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:6px;vertical-align:middle;margin-inline-end:6px">` : '') + (c && c.color && !c.logo ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color};margin-inline-end:6px"></span>` : '') + esc(c ? c.name : '؟'); tag = `<span class="tag ${c && c.kind === 'saving' ? 'sv' : ''}">${esc(t.legacy ? 'قديم' : w ? w.name : '')}</span>`; amt = fmt(t.amount); }
   return `<div class="item" data-act="editTx" data-id="${esc(t.id)}"><div class="sp"><div><b>${title}</b> ${tag}</div><div class="mut">${Core.fmtTime(t.ts)}${t.qty && t.qty !== 1 ? ' · ×' + t.qty : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></div><div class="amt ${cls}">${amt}</div></div>`;
 }
 
@@ -198,6 +225,7 @@ function vSettings() {
 
 /* ---------------- الإجراءات ---------------- */
 const actions = {
+  parseSms: () => { const t = ($('#sms_in').value || '').trim(); if (!t) return toast('الصق نص الرسالة أولاً', true); handleSms(t); },
   pickMonth: (d) => { const y = window.scrollY; ui.month = d.k; render(); window.scrollTo(0, y); },
   toggleOld: () => { ui.showOld = !ui.showOld; render(); },
   addType: (d) => { ui.addType = d.t; ui.cat = null; ui.pay = null; ui.payManual = false; render(); },
@@ -217,7 +245,10 @@ const actions = {
     if (t === 'exp') { if (!ui.cat) return toast('اختر التصنيف', true); const q = parseNum($('#f_qty').value) || 1; rec = { id: Core.uid(), ts, type: 'exp', pay: ui.pay || (cById(ui.cat) || {}).kind || 'salary', wallet: ui.wallet, cat: ui.cat, unit: amt, qty: q, amount: Core.round2(amt * q), note }; }
     else if (t === 'transfer') { if (!ui.toWallet || ui.toWallet === ui.wallet) return toast('اختر محفظتين مختلفتين', true); rec = { id: Core.uid(), ts, type: 'transfer', wallet: ui.wallet, to: ui.toWallet, amount: amt, fee: parseNum($('#f_fee').value), qty: 1, cat: null, note }; }
     else rec = { id: Core.uid(), ts, type: 'income', wallet: ui.wallet, amount: amt, qty: 1, cat: null, note };
+    if (ui.smsHash && (S.settings.smsSeen || []).includes(ui.smsHash) && !confirm('هذي الرسالة سبق تسجيلها. تبي تسجلها مرة ثانية؟')) return;
     await putTx(rec);
+    if (ui.smsHash) { S.settings.smsSeen = ((S.settings.smsSeen || []).concat(ui.smsHash)).slice(-300); await touchSettings(); }
+    ui.prefill = null; ui.sms = null; ui.smsHash = null;
     const k = Core.monthKey(ts, S.settings.monthStart); const m = Core.monthSummary(S, k);
     const over = m.salary > 0 && m.salaryExp > m.salary;
     ui.cat = null; ui.pay = null; ui.payManual = false; ui.month = k; render();
@@ -249,6 +280,7 @@ const actions = {
     modal(`<h2>${d.id ? 'تعديل محفظة' : 'محفظة جديدة'}</h2><label class="f">الاسم</label><input id="w_n" value="${esc(w.name)}">
     <label class="f">الرصيد الحالي (يُحتسب منه أي تغيير لاحق)</label><input id="w_o" value="${d.id ? Core.balances(S)[w.id] : 0}" inputmode="decimal">
     <label class="f">الشعار (يتصغر تلقائياً لمقاس زر المحفظة)</label><div class="row"><div id="w_prev">${walletIcon({ name: w.name || '؟', logo: ui.tmpLogo, color: w.color })}</div><label class="b">اختر صورة<input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" data-act="clearLogo">إزالة</button></div>
+    <label class="f">نوع رسائل البنك (لقراءة الرسائل تلقائياً)</label><select id="w_s"><option value="">حسب الاسم</option>${Object.entries(Core.BANKS).map(([k, v]) => `<option value="${k}" ${w.sms === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
     <label class="f"><input type="checkbox" id="w_h" ${w.hidden ? 'checked' : ''}> إخفاء المحفظة</label>
     <div class="row"><button class="b pri sp" data-act="saveWallet" data-id="${d.id}">حفظ</button>${d.id ? `<button class="b dng" data-act="delWallet" data-id="${d.id}">حذف</button>` : ''}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
@@ -259,7 +291,7 @@ const actions = {
     let w = d.id ? wById(d.id) : null; const wantBal = parseNum($('#w_o').value);
     if (!w) { w = { id: 'w' + Date.now().toString(36), name, color: '#1f5fa8', logo: null, hidden: false, order: S.wallets.length, opening: 0 }; S.wallets.push(w); }
     const cur = Core.balances(S)[w.id] || 0; w.opening = Core.round2((w.opening || 0) + (wantBal - cur));
-    w.name = name; w.logo = ui.tmpLogo; w.hidden = $('#w_h').checked; touchList(w);
+    w.name = name; w.logo = ui.tmpLogo; w.hidden = $('#w_h').checked; w.sms = $('#w_s').value || null; touchList(w);
     if (!S.anchorTs) S.anchorTs = 1; await touchSettings(); closeModal(); render();
   },
   delWallet: async (d) => { const w = wById(d.id); if (!w || !confirm(`حذف المحفظة «${w.name}»؟\nستختفي من القوائم وتبقى عملياتها السابقة محفوظة، وتقدر تعيدها من التعديل.`)) return; w.hidden = true; touchList(w); await touchSettings(); closeModal(); render(); toast('تم حذف (إخفاء) المحفظة'); },
@@ -402,6 +434,7 @@ window.addEventListener('offline', renderSync);
   const q = new URLSearchParams(location.search);
   if (q.get('code')) { try { await Dropbox.finish(q.get('code')); toast('تم ربط Dropbox ✓'); history.replaceState(null, '', location.pathname); ui.tab = 'settings'; setTimeout(() => syncNow(true), 500); } catch (e) { toast(e.message, true); } }
   render();
+  { const txt = q.get('sms') || [q.get('title'), q.get('text')].filter(Boolean).join('\n'); if (txt && !q.get('code')) { history.replaceState(null, '', location.pathname); handleSms(txt); } }
   if (DB.broken) toast('تنبيه: المتصفح لا يسمح بالتخزين في هذا الوضع، افتح التطبيق من رابط https حتى تنحفظ بياناتك', true);
   if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (S.settings.dropbox.token && navigator.onLine) syncNow(false);
