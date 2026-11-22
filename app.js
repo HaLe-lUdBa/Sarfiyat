@@ -55,7 +55,7 @@ const wallets = (all) => S.wallets.filter((w) => all || !w.hidden).sort((a, b) =
 const cats = (all) => S.categories.filter((c) => all || !c.hidden).sort((a, b) => a.order - b.order);
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
-const APP_VERSION = '3';
+const APP_VERSION = '4';
 const catColor = (id) => { const c = S.categories.find((x) => x.id === id); return c && c.color ? c.color : null; };
 const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
@@ -96,17 +96,16 @@ function vHome() {
   const sums = {}; visible.forEach((k) => (sums[k] = Core.monthSummary(S, k)));
   const usedCats = cs.filter((c) => visible.some((k) => sums[k].byCat[c.id]));
   const years = {}; visible.forEach((k) => (years[k.slice(0, 4)] = years[k.slice(0, 4)] || []).push(k));
-  const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th ${c.color ? `style="box-shadow:inset 0 4px 0 ${c.color}"` : ''}>${esc(c.name)}${c.logo ? `<img src="${c.logo}" style="width:24px;height:24px;border-radius:6px;display:block;margin:4px auto 0">` : ''}</th>`).join('')}<th>المصروف</th><th>المتبقي</th><th>الراتب</th><th>نسبة التوفير</th></tr>`;
-  const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="h" data-yr="${y}" ${isOpen('h', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td><b>${k}</b></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}" ${c.color ? `style="background:${c.color}22"` : ''}>${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td><b>${fmt(s.salaryExp)}</b></td><td class="${s.remaining < 0 ? 'bad' : 'good'}">${s.salary ? fmt(s.remaining) : ''}</td><td>${s.salary ? fmt(s.salary) : ''}</td><td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
+  const th = `<tr><th>الفترة</th>${usedCats.map((c) => `<th ${c.color ? `style="box-shadow:inset 0 4px 0 ${c.color}"` : ''}>${esc(c.name)}${c.logo ? `<img src="${c.logo}" style="width:24px;height:24px;border-radius:6px;display:block;margin:4px auto 0">` : ''}</th>`).join('')}<th>نسبة التوفير</th></tr>`;
+  const yearTables = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="h" data-yr="${y}" ${isOpen('h', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${th}${years[y].map((k) => { const s = sums[k]; return `<tr class="${k === key ? 'sel' : ''}" data-act="pickMonth" data-k="${k}"><td><b>${k}</b></td>${usedCats.map((c) => `<td class="${c.kind === 'saving' ? 'sv' : ''}" ${c.color ? `style="background:${c.color}22"` : ''}>${s.byCat[c.id] ? fmt(s.byCat[c.id]) : ''}</td>`).join('')}<td>${s.salary ? Math.round((s.remaining / s.salary) * 100) + '%' : ''}</td></tr>`; }).join('')}</table></div></details>`).join('');
   const top = Object.entries(m.byCat).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, v]) => `<span class="tag ${cById(id) && cById(id).kind === 'saving' ? 'sv' : ''}" ${catColor(id) ? `style="background:${catColor(id)}33;color:${catColor(id)}"` : ''}>${esc(cById(id) ? cById(id).name : '؟')} ${fmt(v)}</span>`).join(' ');
   return `${over ? `<div class="alert">⚠ تنبيه: صرفت ${fmt(m.salaryExp)} وهذا أكثر من راتب هذا الشهر (${fmt(m.salary)}) بزيادة ${fmt(m.salaryExp - m.salary)}</div>` : ''}
-  <div class="card"><div class="row"><h2 class="sp"><b>${key}</b></h2><button class="b sm" data-act="salary" data-k="${key}">الراتب: ${m.salary ? fmt(m.salary) : 'حدد'}</button></div>
+  <div class="card"><div class="row"><h2 class="sp"><b>${key}</b></h2></div>
   <div class="row"><div class="sp"><div class="mut">مصروف من الراتب</div><div class="big ${over ? 'bad' : ''}">${fmt(m.salaryExp)}</div></div>
   <div class="sp"><div class="mut">المتبقي (التوفير)</div><div class="big ${m.remaining < 0 ? 'bad' : 'good'}">${m.salary ? fmt(m.remaining) : '—'}</div></div></div>
   <div class="bar ${over ? 'over' : ''}"><i style="width:${pct}%"></i></div>
-  <div class="mut">مشتريات التوفير (لا تُخصم من الراتب): <b class="sav">${fmt(m.savingExp)}</b> · رسوم التحويل: ${fmt(m.fees)} · دخل إضافي: ${fmt(m.income)} · إجمالي الشهر: ${fmt(m.total)}</div>
   <div style="margin-top:8px">${top}</div></div>
-  <h3>الأشهر (اضغط على شهر لاختياره)</h3>${yearTables}
+  ${yearTables}
   ${S.settings.hideBefore ? `<button class="b sm" data-act="toggleOld">${ui.showOld ? 'إخفاء' : 'إظهار'} التواريخ القديمة</button>` : ''}`;
 }
 
@@ -165,8 +164,7 @@ function vLog() {
   const ms = S.settings.monthStart; const keys = Core.monthKeys(S); const key = ui.logMonth || ui.month || curKey(); ui.logMonth = key;
   const list = S.tx.filter((t) => !t.del && Core.monthKey(t.ts, ms) === key).filter((t) => !ui.logFilter || ((cById(t.cat) || {}).name || '').includes(ui.logFilter) || (t.note || '').includes(ui.logFilter)).sort((a, b) => b.ts - a.ts);
   const byDay = {}; list.forEach((t) => (byDay[Core.fmtDate(t.ts)] = byDay[Core.fmtDate(t.ts)] || []).push(t));
-  return `<div class="card"><div class="row"><select id="logSel" data-chg="logMonth" style="flex:3">${[...new Set([key, ...keys])].sort().reverse().map((k) => `<option value="${k}" ${k === key ? 'selected' : ''}>${k}</option>`).join('')}</select><input id="logQ" placeholder="بحث" value="${esc(ui.logFilter)}" data-chg="logQ" style="flex:1;min-width:0;width:90px"></div>
-  <div class="mut">${list.length} عملية</div></div>
+  return `<div class="card"><div class="row" style="flex-wrap:nowrap;gap:6px"><select id="logSel" data-chg="logMonth" style="width:104px;flex:none;margin:0;padding:9px 6px">${[...new Set([key, ...keys])].sort().reverse().map((k) => `<option value="${k}" ${k === key ? 'selected' : ''}>${k}</option>`).join('')}</select><input id="logQ" placeholder="بحث" value="${esc(ui.logFilter)}" data-chg="logQ" style="flex:1;min-width:0;margin:0"><span class="mut" style="white-space:nowrap">${list.length} عملية</span></div></div>
   ${Object.keys(byDay).map((d) => `<div class="card"><h3 style="margin-top:0">${d}</h3>${byDay[d].map(itemHtml).join('')}</div>`).join('') || '<div class="card mut">لا توجد عمليات</div>'}`;
 }
 function itemHtml(t) {
@@ -195,8 +193,9 @@ function vWallets() {
   const total = ws.reduce((s, w) => s + (bal[w.id] || 0), 0);
   const keys = Core.monthKeys(S).filter((k) => Core.monthRange(k, ms)[0] >= (S.anchorTs ? 0 : 0));
   const years = {}; keys.forEach((k) => (years[k.slice(0, 4)] = years[k.slice(0, 4)] || []).push(k));
-  const head = `<tr><th rowspan="2">الفترة</th>${ws.map((w) => `<th colspan="3">${esc(w.name)}</th>`).join('')}<th colspan="3">الكلي</th></tr><tr>${[...ws, 0].map(() => '<th>بداية الشهر</th><th>نهاية الشهر</th><th>الفرق</th>').join('')}</tr>`;
-  const tbl = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="w" data-yr="${y}" ${isOpen('w', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${head}${years[y].map((k) => { const [a, b] = Core.monthRange(k, ms); let s0 = 0, s1 = 0; const cells = ws.map((w) => { const x = balAt(ser[w.id], a - 1), y2 = balAt(ser[w.id], b); s0 += x; s1 += y2; return `<td>${fmt(x)}</td><td>${fmt(y2)}</td><td class="${y2 - x < 0 ? 'bad' : 'good'}">${fmt(y2 - x)}</td>`; }).join(''); return `<tr><td><b>${k}</b></td>${cells}<td>${fmt(s0)}</td><td>${fmt(s1)}</td><td class="${s1 - s0 < 0 ? 'bad' : 'good'}">${fmt(s1 - s0)}</td></tr>`; }).join('')}</table></div></details>`).join('');
+  const wcol = (w) => w.color || '#1f5fa8'; const tint = (c, p) => `color-mix(in srgb, ${c} ${p}%, var(--card))`;
+  const head = `<tr><th rowspan="2">الفترة</th>${ws.map((w) => `<th colspan="3" style="background:${wcol(w)};color:#fff">${esc(w.name)}</th>`).join('')}<th colspan="3">الكلي</th></tr><tr>${[...ws, 0].map((w) => `<th class="hs">بداية الشهر</th><th class="he">نهاية الشهر</th><th ${w ? `style="background:${tint(wcol(w), 38)}"` : ''}>الفرق</th>`).join('')}</tr>`;
+  const tbl = Object.keys(years).sort().reverse().map((y, i) => `<details data-sc="w" data-yr="${y}" ${isOpen('w', y, i) ? 'open' : ''}><summary>${y}</summary><div class="tw"><table>${head}${years[y].map((k) => { const [a, b] = Core.monthRange(k, ms); let s0 = 0, s1 = 0; const cells = ws.map((w) => { const x = balAt(ser[w.id], a - 1), y2 = balAt(ser[w.id], b); s0 += x; s1 += y2; return `<td class="cs">${fmt(x)}</td><td class="ce">${fmt(y2)}</td><td class="${y2 - x < 0 ? 'bad' : 'good'}" style="background:${tint(wcol(w), 16)}">${fmt(y2 - x)}</td>`; }).join(''); return `<tr><td><b>${k}</b></td>${cells}<td class="cs">${fmt(s0)}</td><td class="ce">${fmt(s1)}</td><td class="${s1 - s0 < 0 ? 'bad' : 'good'}">${fmt(s1 - s0)}</td></tr>`; }).join('')}</table></div></details>`).join('');
   return `<div class="card"><h2>الأرصدة الحالية</h2><div class="wal">${ws.map((w) => `<div class="wb">${walletIcon(w)}<b>${esc(w.name)}</b><span>${fmt(bal[w.id])}</span></div>`).join('')}</div><div class="row"><div class="sp mut">الكلي</div><div class="big">${fmt(total)}</div></div>
   <div class="mut">الأرصدة تتحدث تلقائياً مع كل عملية. السجلات القديمة (قبل 2020) بدون محفظة ولا تؤثر على الأرصدة.</div></div>
   <h3>بداية ونهاية كل شهر (مثل شيت total)</h3>${tbl}`;
@@ -205,10 +204,12 @@ function vWallets() {
 /* ---------------- الإعدادات ---------------- */
 function vSettings() {
   const d = S.settings.dropbox;
-  return `<div class="card"><h2>الشهر والمظهر</h2>
-  <label class="f">يبدأ الشهر من اليوم (ويمتد لقبل اليوم نفسه من الشهر التالي)</label><input id="s_ms" type="number" min="1" max="28" value="${S.settings.monthStart}" data-chg="setMs">
-  <label class="f">المظهر</label><select data-chg="setTheme">${[['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'غامق']].map(([v, l]) => `<option value="${v}" ${S.settings.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-  <label class="f">إخفاء الأشهر قبل تاريخ (لا يحذفها)</label><input type="date" value="${S.settings.hideBefore ? Core.fmtDate(S.settings.hideBefore).replace(/\//g, '-') : ''}" data-chg="setHide"></div>
+  const THEME = { auto: '🌓', light: '☀️', dark: '🌙' };
+  const mkeys = [...new Set([...Core.monthKeys(S), curKey()])].sort().reverse(); const sm = ui.salMonth || curKey();
+  return `<div class="card"><div class="row" style="flex-wrap:nowrap"><h2 class="sp" style="margin:0">الشهر والمظهر</h2><button class="b" data-act="cycleTheme" aria-label="المظهر" style="font-size:20px;padding:4px 12px;line-height:1.3">${THEME[S.settings.theme] || THEME.auto}</button></div>
+  <div class="row" style="align-items:flex-end;flex-wrap:nowrap;margin-top:8px"><div style="width:78px;flex:none"><label class="f">بداية الشهر</label><input id="s_ms" type="number" inputmode="numeric" min="1" max="28" value="${S.settings.monthStart}" data-chg="setMs" style="text-align:center;padding:11px 4px"></div>
+  <div class="sp" style="min-width:0"><label class="f">إخفاء الأشهر قبل تاريخ</label><input type="date" value="${S.settings.hideBefore ? Core.fmtDate(S.settings.hideBefore).replace(/\//g, '-') : ''}" data-chg="setHide"></div></div></div>
+  <div class="card"><h2>الراتب الشهري</h2><div class="row" style="flex-wrap:nowrap"><select id="sal_m" data-chg="salMonth" style="flex:1;margin:0">${mkeys.map((k) => `<option value="${k}" ${k === sm ? 'selected' : ''}>${k} — ${S.salaries[k] ? fmt(S.salaries[k]) : 'غير محدد'}</option>`).join('')}</select><button class="b pri" data-act="salaryBtn">تعديل</button></div></div>
   <div class="card"><h2>المحافظ</h2>${wallets(true).map((w, i) => `<div class="item">${walletIcon(w, 'mini')}<div class="sp" data-act="editWallet" data-id="${w.id}" style="cursor:pointer"><b>${esc(w.name)}</b>${w.hidden ? ' <span class="mut">(مخفية)</span>' : ''}</div><span class="drag"><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="-1">▲</button><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editWallet" data-id="">+ محفظة جديدة</button></div>
   <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: c.color || '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}" data-act="editCat" data-id="${c.id}" style="cursor:pointer"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button></div>
   <div class="card"><h2>Excel</h2><div class="row"><label class="b pri sp" style="text-align:center">استيراد من Excel<input type="file" accept=".xlsx,.xls" data-chg="importXlsx"></label><button class="b sp" data-act="exportXlsx">تصدير إلى Excel</button></div><div class="mut" style="margin-top:6px">الاستيراد يكرر نفس عمليات الملف بدون تضاعف لو استوردت مرتين. العمليات اللي أضفتها من التطبيق لا تُمس.</div></div>
@@ -272,26 +273,32 @@ const actions = {
   },
   delTx: async (d) => { if (!confirm('حذف العملية؟')) return; const t = Object.assign({}, S.tx.find((x) => x.id === d.id), { del: true }); await putTx(t); closeModal(); render(); toast('تم الحذف'); },
   setMs: async (d, el) => { const v = Math.max(1, Math.min(28, parseInt(el.value) || 1)); S.settings.monthStart = v; ui.month = null; ui.logMonth = null; await touchSettings(); toast('تم الحفظ'); },
-  setTheme: async (d, el) => { S.settings.theme = el.value; applyTheme(); await touchSettings(); },
+  cycleTheme: async () => { const o = ['auto', 'light', 'dark']; S.settings.theme = o[(o.indexOf(S.settings.theme) + 1) % 3]; applyTheme(); await touchSettings(); render(); toast({ auto: 'المظهر: تلقائي', light: 'المظهر: فاتح', dark: 'المظهر: غامق' }[S.settings.theme]); },
+  salMonth: (d, el) => { ui.salMonth = el.value; },
+  salaryBtn: () => actions.salary({ k: $('#sal_m').value }),
   setHide: async (d, el) => { S.settings.hideBefore = el.value ? inputToTs(el.value + 'T00:00') : 0; await touchSettings(); },
   editWallet: (d) => {
     const w = d.id ? wById(d.id) : { id: '', name: '', opening: 0, hidden: false, logo: null };
     ui.tmpLogo = w.logo || null;
-    modal(`<h2>${d.id ? 'تعديل محفظة' : 'محفظة جديدة'}</h2><label class="f">الاسم</label><input id="w_n" value="${esc(w.name)}">
-    <label class="f">الرصيد الحالي (يُحتسب منه أي تغيير لاحق)</label><input id="w_o" value="${d.id ? Core.balances(S)[w.id] : 0}" inputmode="decimal">
-    <label class="f">الشعار (يتصغر تلقائياً لمقاس زر المحفظة)</label><div class="row"><div id="w_prev">${walletIcon({ name: w.name || '؟', logo: ui.tmpLogo, color: w.color })}</div><label class="b">اختر صورة<input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" data-act="clearLogo">إزالة</button></div>
+    modal(`<h2>${d.id ? 'تعديل محفظة' : 'محفظة جديدة'}</h2>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-end;gap:6px">
+      <div style="flex:none;text-align:center"><label class="f">الشعار</label><div style="position:relative;margin:4px 0 8px"><label style="cursor:pointer;display:block"><span id="w_prev">${walletIcon({ name: w.name || '؟', logo: ui.tmpLogo, color: w.color })}</span><input type="file" accept="image/*" data-chg="logoFile"></label><button class="b sm" id="w_x" data-act="clearLogo" aria-label="إزالة الصورة" style="position:absolute;top:-8px;inset-inline-start:-8px;padding:0 6px;line-height:20px;border-radius:50%;${ui.tmpLogo ? '' : 'display:none'}">✕</button></div></div>
+      <div style="flex:2;min-width:0"><label class="f">الاسم</label><input id="w_n" value="${esc(w.name)}"></div>
+      <div style="flex:1.5;min-width:0"><label class="f">الرصيد الحالي</label><input id="w_o" value="${d.id ? Core.balances(S)[w.id] : 0}" inputmode="decimal"></div>
+      <div style="flex:none;width:48px"><label class="f">اللون</label><input type="color" id="w_c" value="${w.color || '#1f5fa8'}" style="padding:2px;height:48px"></div>
+    </div>
     <label class="f">نوع رسائل البنك (لقراءة الرسائل تلقائياً)</label><select id="w_s"><option value="">حسب الاسم</option>${Object.entries(Core.BANKS).map(([k, v]) => `<option value="${k}" ${w.sms === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
     <label class="f"><input type="checkbox" id="w_h" ${w.hidden ? 'checked' : ''}> إخفاء المحفظة</label>
     <div class="row"><button class="b pri sp" data-act="saveWallet" data-id="${d.id}">حفظ</button>${d.id ? `<button class="b dng" data-act="delWallet" data-id="${d.id}">حذف</button>` : ''}<button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
-  logoFile: (d, el) => { const f = el.files[0]; if (!f) return; const img = new Image(); const url = URL.createObjectURL(f); img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 96; const x = c.getContext('2d'); const s = Math.min(img.width, img.height); x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 96, 96); ui.tmpLogo = c.toDataURL('image/png'); URL.revokeObjectURL(url); $('#w_prev').innerHTML = walletIcon({ name: '', logo: ui.tmpLogo }); }; img.src = url; },
-  clearLogo: () => { ui.tmpLogo = null; $('#w_prev').innerHTML = walletIcon({ name: $('#w_n').value || '؟', logo: null }); },
+  logoFile: (d, el) => { const f = el.files[0]; if (!f) return; const img = new Image(); const url = URL.createObjectURL(f); img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = 96; const x = c.getContext('2d'); const s = Math.min(img.width, img.height); x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 96, 96); ui.tmpLogo = c.toDataURL('image/png'); URL.revokeObjectURL(url); $('#w_prev').innerHTML = walletIcon({ name: '', logo: ui.tmpLogo }); const xb = $('#w_x'); if (xb) xb.style.display = ''; }; img.src = url; el.value = ''; },
+  clearLogo: () => { ui.tmpLogo = null; $('#w_prev').innerHTML = walletIcon({ name: ($('#w_n') || $('#c_n')).value || '؟', logo: null }); const x = $('#w_x'); if (x) x.style.display = 'none'; },
   saveWallet: async (d) => {
     const name = $('#w_n').value.trim(); if (!name) return toast('اكتب اسم المحفظة', true);
     let w = d.id ? wById(d.id) : null; const wantBal = parseNum($('#w_o').value);
     if (!w) { w = { id: 'w' + Date.now().toString(36), name, color: '#1f5fa8', logo: null, hidden: false, order: S.wallets.length, opening: 0 }; S.wallets.push(w); }
     const cur = Core.balances(S)[w.id] || 0; w.opening = Core.round2((w.opening || 0) + (wantBal - cur));
-    w.name = name; w.logo = ui.tmpLogo; w.hidden = $('#w_h').checked; w.sms = $('#w_s').value || null; touchList(w);
+    w.name = name; w.logo = ui.tmpLogo; w.color = $('#w_c').value; w.hidden = $('#w_h').checked; w.sms = $('#w_s').value || null; touchList(w);
     if (!S.anchorTs) S.anchorTs = 1; await touchSettings(); closeModal(); render();
   },
   delWallet: async (d) => { const w = wById(d.id); if (!w || !confirm(`حذف المحفظة «${w.name}»؟\nستختفي من القوائم وتبقى عملياتها السابقة محفوظة، وتقدر تعيدها من التعديل.`)) return; w.hidden = true; touchList(w); await touchSettings(); closeModal(); render(); toast('تم حذف (إخفاء) المحفظة'); },

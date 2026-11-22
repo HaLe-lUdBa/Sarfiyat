@@ -63,3 +63,6 @@ details{margin-bottom:10px}summary{font-weight:700;padding:8px 0;cursor:pointer}
 
 .src{display:flex;gap:8px;margin-bottom:10px}.src .b{flex:1;text-align:center}
 .wb{min-width:0;overflow:hidden}
+
+.cs{background:color-mix(in srgb,#3b82d6 11%,var(--card))}.ce{background:color-mix(in srgb,#d6a028 13%,var(--card))}
+th.hs{background:color-mix(in srgb,#3b82d6 34%,var(--card))}th.he{background:color-mix(in srgb,#d6a028 36%,var(--card))}
