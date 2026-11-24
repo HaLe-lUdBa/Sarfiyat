@@ -218,7 +218,9 @@
   Core.BANKS = { inv: 'الاستثمار', bld: 'البلاد', rjh: 'الراجحي', stc: 'stc bank' };
   Core.parseSms = function (raw, nowTs) {
     const t = String(raw || '').replace(/[؜‎‏‪-‮]/g, '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.').replace(/\r/g, '');
-    const lines = t.split('\n').map((s) => s.trim()).filter(Boolean);
+    const lines0 = t.split('\n').map((s) => s.trim()).filter(Boolean);
+    // لو وصل النص في سطر واحد (بعض برامج الأتمتة تحذف الأسطر): نرجّع الفواصل قبل أسماء الحقول المعروفة
+    const lines = lines0.length > 1 || (lines0[0] || '').length < 25 ? lines0 : lines0[0].replace(/\s+(?=(?:المبلغ|مبلغ|المصرف|لدى\s*:|مفوتر|الرسوم|رسوم|خدمة|رقم الفاتورة|بطاقة|رصيد|عبر\s*:|آيبان|القسط|خصم\s*:|مدى باي|المرسل|المستقبل|حساب|مرجع|في\s*[:\d]|إلى\s*:|الى\s*:|من(?=\s*[:*A-Za-z])|ب(?:ـ)?(?=\s*(?::\s*\d|SAR|SR|USD))))/g, '\n').replace(/(?<![:ـ])\s+(?=\d+(?:[.,]\d+)?\s*(?:SR|SAR|ر\.س)(?![A-Za-z]))/g, '\n').split('\n').map((s) => s.trim()).filter(Boolean);
     const full = lines.join('\n');
     const out = { bank: null, kind: 'exp', amount: null, fee: 0, cur: 'SAR', foreign: false, note: '', ts: null, ok: false };
     if (!lines.length) return out;
@@ -249,7 +251,7 @@
         if ((m = line.match(/^(?:المبلغ|مبلغ|القسط)\s*:?\s*(?:([A-Za-z]{2,3})\s*)?([\d][\d,]*\.?\d*)\s*([A-Za-z]{2,3}|ر\.س)?\s*$/))) { cur = m[1] || m[3]; v = m[2]; }
         else if ((m = line.match(/بـ\s*:?\s*(SAR|SR)\s*([\d][\d,]*\.?\d*)/i))) { cur = m[1]; v = m[2]; }
         else if ((m = line.match(/^بـ?\s*(:)?\s*(?:([A-Za-z]{3})\s*)?([\d][\d,]*\.?\d*)\s*([A-Za-z]{2,3}|ر\.س)?\s*$/)) && (m[1] || m[2] || m[4])) { cur = m[2] || m[4]; v = m[3]; }
-        else if ((m = line.match(/^([\d][\d,]*\.?\d*)\s*(SR|SAR|ر\.س)$/i))) { cur = m[2]; v = m[1]; }
+        else if ((m = line.match(/^([\d][\d,]*\.?\d*)\s*(SR|SAR|ر\.س)(?:\s|$)/i))) { cur = m[2]; v = m[1]; }
         if (v != null) { out.amount = num(v); out.cur = (cur || 'SAR').toUpperCase(); out.foreign = !isSar(cur); }
       }
       if (!merchant) {
@@ -286,6 +288,7 @@
     if (t.legacy || !t.wallet) return 0;
     if (t.type === 'exp') return t.wallet === wid ? -t.amount : 0;
     if (t.type === 'income') return t.wallet === wid ? t.amount : 0;
+    if (t.type === 'adj') return t.wallet === wid ? t.amount : 0; // تسوية رصيد (موجب/سالب) لا تُحسب مصروفاً
     if (t.type === 'transfer') return (t.wallet === wid ? -(t.amount + (t.fee || 0)) : 0) + (t.to === wid ? t.amount : 0);
     return 0;
   };
@@ -391,7 +394,7 @@
         const ser = Core.tsToSerial(t.ts);
         const q = t.qty || 1;
         if (t.type === 'exp') rows.push([t.legacy ? '' : wIdx[t.wallet], catName[t.cat], t.amount, t.note || '', t.unit != null && !isNaN(t.unit) ? t.unit : round2(t.amount / q), q, ser]);
-        else if (t.type === 'income') rows.push([wIdx[t.wallet], '', -t.amount, t.note || '', -t.amount, 1, ser]);
+        else if (t.type === 'income' || t.type === 'adj') rows.push([wIdx[t.wallet], '', -t.amount, t.note || '', -t.amount, 1, ser]);
         else if (t.type === 'transfer') { rows.push([wIdx[t.wallet], t.cat ? catName[t.cat] : '', round2(t.amount + (t.fee || 0)), t.note || '', round2(t.amount + (t.fee || 0)), 1, ser]); rows.push([wIdx[t.to], t.cat ? catName[t.cat] : '', -t.amount, '', -t.amount, 1, ser]); }
       });
       const ws = XLSX.utils.aoa_to_sheet(rows);

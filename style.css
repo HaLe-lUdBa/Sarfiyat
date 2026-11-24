@@ -66,3 +66,11 @@ details{margin-bottom:10px}summary{font-weight:700;padding:8px 0;cursor:pointer}
 
 .cs{background:color-mix(in srgb,#3b82d6 11%,var(--card))}.ce{background:color-mix(in srgb,#d6a028 13%,var(--card))}
 th.hs{background:color-mix(in srgb,#3b82d6 34%,var(--card))}th.he{background:color-mix(in srgb,#d6a028 36%,var(--card))}
+
+.bars{display:flex;align-items:flex-end;gap:4px;height:140px}
+.bc{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%;cursor:pointer}
+.bb{background:var(--acc);border-radius:4px 4px 0 0;min-height:2px}.bb.over{background:var(--bad)}
+.bc.cur .bb{outline:2px solid var(--ink);outline-offset:1px}
+.bv,.bl{font-size:9px;text-align:center;color:var(--mut);white-space:nowrap;overflow:hidden}.bl{margin-top:3px}.bc.cur .bl,.bc.cur .bv{color:var(--ink);font-weight:700}
+.dr{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px}.dn{width:92px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db{flex:1;height:10px;background:var(--line);border-radius:5px;overflow:hidden}.db i{display:block;height:100%;border-radius:5px}.dv{width:104px;flex:none;text-align:start;white-space:nowrap}
