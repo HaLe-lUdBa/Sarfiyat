@@ -52,10 +52,33 @@ const touchList = (o) => { o.upd = Date.now(); };
 /* ---------------- مساعدات ---------------- */
 const curKey = () => Core.monthKey(Core.nowLocalTs(), S.settings.monthStart);
 const wallets = (all) => S.wallets.filter((w) => all || !w.hidden).sort((a, b) => a.order - b.order);
-const cats = (all) => S.categories.filter((c) => all || !c.hidden).sort((a, b) => a.order - b.order);
+const cats = (all) => S.categories.filter((c) => !c.del && (all || !c.hidden)).sort((a, b) => a.order - b.order);
+const catKey = (n) => String(n || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+async function mergeCatInto(from, to) {
+  const moved = S.tx.filter((t) => t.cat === from.id);
+  const now = Date.now();
+  moved.forEach((t) => { t.cat = to.id; t.upd = now; });
+  if (moved.length) await DB.putMany(moved);
+  if (!to.logo && from.logo) to.logo = from.logo; if (!to.color && from.color) to.color = from.color; to.upd = now;
+  from.del = true; from.hidden = true; from.upd = now + 1;
+  return moved.length;
+}
+async function dedupeCategories() {
+  const groups = {}; S.categories.filter((c) => !c.del).forEach((c) => (groups[catKey(c.name)] = groups[catKey(c.name)] || []).push(c));
+  const count = {}; S.tx.forEach((t) => { if (t.cat) count[t.cat] = (count[t.cat] || 0) + 1; });
+  let n = 0;
+  for (const g of Object.values(groups)) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => (count[b.id] || 0) - (count[a.id] || 0) || (a.hidden ? 1 : 0) - (b.hidden ? 1 : 0) || a.order - b.order || String(a.id).localeCompare(String(b.id)));
+    const keep = g[0]; if (keep.hidden && g.some((c) => !c.hidden)) keep.hidden = false;
+    for (const c of g.slice(1)) { await mergeCatInto(c, keep); n++; }
+  }
+  if (n) { await touchSettings(); }
+  return n;
+}
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
-const APP_VERSION = '5';
+const APP_VERSION = '6';
 const catColor = (id) => { const c = S.categories.find((x) => x.id === id); return c && c.color ? c.color : null; };
 const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
@@ -153,6 +176,8 @@ function handleSms(text) {
   if (r.kind === 'exp' && r.note) { const prev = S.tx.filter((t) => !t.del && t.type === 'exp' && t.note && t.note === r.note).sort((a, b) => b.ts - a.ts)[0]; if (prev && cById(prev.cat) && !cById(prev.cat).hidden) { ui.cat = prev.cat; ui.pay = prev.pay || cById(prev.cat).kind; } }
   ui.smsOpen = false; go('add');
 }
+function paySegHtml() { return `<button class="b ${(ui.pay || 'salary') === 'salary' ? 'pri' : ''}" data-act="pickPay" data-p="salary">الراتب</button><button class="b ${ui.pay === 'saving' ? 'pri' : ''}" data-act="pickPay" data-p="saving">التوفير</button>`; }
+function catGridHtml() { return cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" ${c.color ? `style="border-color:${c.color};${ui.cat === c.id ? `background:${c.color};color:#fff` : `background:${c.color}1f`}"` : ''} data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join(''); }
 function vAdd() {
   const ws = wallets(); if (!ui.wallet || !wById(ui.wallet)) ui.wallet = ws[0] && ws[0].id;
   if (ui.addType === 'transfer' && (!ui.toWallet || ui.toWallet === ui.wallet)) ui.toWallet = (ws.find((w) => w.id !== ui.wallet) || {}).id;
@@ -169,12 +194,13 @@ function vAdd() {
   <div class="card">
   ${recentHtml}<h3 style="margin-top:0">${t === 'transfer' ? 'من محفظة' : t === 'income' ? 'تدخل في محفظة' : 'ادفع من محفظة'}</h3>${walBtns(ui.wallet, 'pickWallet')}
   ${t === 'transfer' ? `<h3>إلى محفظة</h3>${walBtns(ui.toWallet, 'pickTo')}` : ''}
-  ${t === 'exp' ? `<h3>الخصم من</h3><div class="src"><button class="b ${(ui.pay || 'salary') === 'salary' ? 'pri' : ''}" data-act="pickPay" data-p="salary">الراتب</button><button class="b ${ui.pay === 'saving' ? 'pri' : ''}" data-act="pickPay" data-p="saving">التوفير</button></div><h3>التصنيف</h3><div class="cats">${cats().map((c) => `<button class="cb ${c.kind === 'saving' ? 'sv' : ''} ${ui.cat === c.id ? 'on' : ''}" ${c.color ? `style="border-color:${c.color};${ui.cat === c.id ? `background:${c.color};color:#fff` : `background:${c.color}1f`}"` : ''} data-act="pickCat" data-id="${c.id}">${c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;margin-left:6px">` : ''}${esc(c.name)}</button>`).join('')}</div>` : ''}
+  ${t === 'exp' ? `<h3>الخصم من</h3><div id="paySeg" class="src">${paySegHtml()}</div><h3>التصنيف</h3><div id="catGrid" class="cats">${catGridHtml()}</div>` : ''}
   <div class="row"><div class="sp"><label class="f">${t === 'exp' ? 'السعر' : 'المبلغ'}</label><input id="f_amt" inputmode="decimal" placeholder="0" value="${esc(pf.amt || '')}"></div>
   ${t === 'exp' ? `<div style="width:90px"><label class="f">الكمية</label><input id="f_qty" inputmode="decimal" value="${esc(pf.qty || 1)}"></div>` : ''}
   ${t === 'transfer' ? `<div style="width:120px"><label class="f">+ رسوم</label><input id="f_fee" inputmode="decimal" placeholder="0" value="${esc(pf.fee || '')}"></div>` : ''}</div>
   ${t === 'exp' ? `<div class="mut" id="totalHint"></div>` : ''}
-  <label class="f">ملاحظة (اختياري)</label><input id="f_note" list="notes_dl" data-chg="noteChg" placeholder="${t === 'income' ? 'راتب / مكافأة / استرجاع…' : 'مثال: فطور'}" value="${esc(pf.note || '')}"><datalist id="notes_dl">${noteSet.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+  <label class="f">${t === 'exp' ? 'المحل' : t === 'income' ? 'المصدر (اختياري)' : 'الوصف (اختياري)'}</label><input id="f_note" ${t === 'exp' ? 'list="notes_dl" data-chg="noteChg"' : ''} placeholder="${t === 'income' ? 'راتب / مكافأة / استرجاع…' : t === 'exp' ? 'اسم المحل أو التاجر' : ''}" value="${esc(pf.note || '')}"><datalist id="notes_dl">${noteSet.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+  <label class="f">ملاحظات (اختياري)</label><input id="f_memo" placeholder="أي تفاصيل تبي تحفظها" value="${esc(pf.memo || '')}">
   <label class="f">الوقت والتاريخ (تلقائي الآن — عدّله لو تبي)</label><input id="f_ts" type="datetime-local" value="${tsToInput(pf.ts || Core.nowLocalTs())}">
   <button class="b pri" style="width:100%;padding:14px" data-act="saveNew">حفظ</button></div>`;
 }
@@ -186,7 +212,7 @@ document.addEventListener('input', (e) => {
 /* ---------------- السجل ---------------- */
 function vLog() {
   const ms = S.settings.monthStart; const keys = Core.monthKeys(S); const key = ui.logMonth || ui.month || curKey(); ui.logMonth = key;
-  const list = S.tx.filter((t) => !t.del && Core.monthKey(t.ts, ms) === key).filter((t) => !ui.logWallet || t.wallet === ui.logWallet || t.to === ui.logWallet).filter((t) => !ui.logCat || t.cat === ui.logCat).filter((t) => !ui.logFilter || ((cById(t.cat) || {}).name || '').includes(ui.logFilter) || (t.note || '').includes(ui.logFilter)).sort((a, b) => b.ts - a.ts);
+  const list = S.tx.filter((t) => !t.del && Core.monthKey(t.ts, ms) === key).filter((t) => !ui.logWallet || t.wallet === ui.logWallet || t.to === ui.logWallet).filter((t) => !ui.logCat || t.cat === ui.logCat).filter((t) => !ui.logFilter || ((cById(t.cat) || {}).name || '').includes(ui.logFilter) || (t.note || '').includes(ui.logFilter) || (t.memo || '').includes(ui.logFilter)).sort((a, b) => b.ts - a.ts);
   const byDay = {}; list.forEach((t) => (byDay[Core.fmtDate(t.ts)] = byDay[Core.fmtDate(t.ts)] || []).push(t));
   return `<div class="card"><div class="row" style="flex-wrap:nowrap;gap:6px"><select id="logSel" data-chg="logMonth" style="width:104px;flex:none;margin:0;padding:9px 6px">${[...new Set([key, ...keys])].sort().reverse().map((k) => `<option value="${k}" ${k === key ? 'selected' : ''}>${k}</option>`).join('')}</select><input id="logQ" placeholder="بحث" value="${esc(ui.logFilter)}" data-chg="logQ" style="flex:1;min-width:0;margin:0"><span class="mut" style="white-space:nowrap">${list.length} عملية</span></div>
   <div class="row" style="flex-wrap:nowrap;gap:6px;margin-top:8px"><select data-chg="logW" style="flex:1;min-width:0;margin:0;padding:8px 6px"><option value="">كل المحافظ</option>${wallets(true).map((w) => `<option value="${w.id}" ${ui.logWallet === w.id ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select><select data-chg="logC" style="flex:1;min-width:0;margin:0;padding:8px 6px"><option value="">كل التصنيفات</option>${cats(true).map((c) => `<option value="${c.id}" ${ui.logCat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
@@ -200,7 +226,7 @@ function itemHtml(t) {
   else if (t.type === 'adj') { title = 'تسوية رصيد'; tag = `<span class="tag tr">${esc(w ? w.name : '')}</span>`; amt = (t.amount > 0 ? '+' : '') + fmt(t.amount); cls = t.amount < 0 ? 'bad' : 'good'; }
   else if (t.type === 'income') { title = 'دخل'; tag = `<span class="tag">${esc(w ? w.name : '')}</span>`; amt = '+' + fmt(t.amount); cls = 'good'; }
   else { title = (c && c.logo ? `<img src="${c.logo}" style="width:22px;height:22px;border-radius:6px;vertical-align:middle;margin-inline-end:6px">` : '') + (c && c.color && !c.logo ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color};margin-inline-end:6px"></span>` : '') + esc(c ? c.name : '؟'); tag = `<span class="tag ${c && c.kind === 'saving' ? 'sv' : ''}">${esc(t.legacy ? 'قديم' : w ? w.name : '')}</span>`; amt = fmt(t.amount); }
-  return `<div class="item" data-act="editTx" data-id="${esc(t.id)}"><div class="sp"><div><b>${title}</b> ${tag}</div><div class="mut">${Core.fmtTime(t.ts)}${t.qty && t.qty !== 1 ? ' · ×' + t.qty : ''}${t.note ? ' · ' + esc(t.note) : ''}</div></div><div class="amt ${cls}">${amt}</div></div>`;
+  return `<div class="item" data-act="editTx" data-id="${esc(t.id)}"><div class="sp"><div><b>${title}</b> ${tag}</div><div class="mut">${Core.fmtTime(t.ts)}${t.qty && t.qty !== 1 ? ' · ×' + t.qty : ''}${t.note ? ' · ' + esc(t.note) : ''}${t.memo ? ' · <i>' + esc(t.memo) + '</i>' : ''}</div></div><div class="amt ${cls}">${amt}</div></div>`;
 }
 
 /* ---------------- المحافظ ---------------- */
@@ -239,7 +265,7 @@ function vSettings() {
   <div class="sp" style="min-width:0"><label class="f">إخفاء الأشهر قبل تاريخ</label><input type="date" value="${S.settings.hideBefore ? Core.fmtDate(S.settings.hideBefore).replace(/\//g, '-') : ''}" data-chg="setHide"></div></div></div>
   <div class="card"><h2>الراتب الشهري</h2><div class="row" style="flex-wrap:nowrap"><select id="sal_m" data-chg="salMonth" style="flex:1;margin:0">${mkeys.map((k) => `<option value="${k}" ${k === sm ? 'selected' : ''}>${k} — ${S.salaries[k] ? fmt(S.salaries[k]) : 'غير محدد'}</option>`).join('')}</select><button class="b pri" data-act="salaryBtn">تعديل</button></div></div>
   <div class="card"><h2>المحافظ</h2>${wallets(true).map((w, i) => `<div class="item">${walletIcon(w, 'mini')}<div class="sp" data-act="editWallet" data-id="${w.id}" style="cursor:pointer"><b>${esc(w.name)}</b>${w.hidden ? ' <span class="mut">(مخفية)</span>' : ''}</div><span class="drag"><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="-1">▲</button><button class="b sm" data-act="moveW" data-id="${w.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editWallet" data-id="">+ محفظة جديدة</button></div>
-  <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: c.color || '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}" data-act="editCat" data-id="${c.id}" style="cursor:pointer"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button></div>
+  <div class="card"><h2>التصنيفات</h2><div class="mut">كل تصنيف: يُحسب على راتب الشهر أو على التوفير. الحذف = إخفاء (العمليات القديمة تبقى).</div>${cats(true).map((c) => `<div class="item">${walletIcon({ name: c.name, logo: c.logo, color: c.color || '#6b736e' }, 'mini')}<div class="sp ${c.hidden ? 'mut' : ''}" data-act="editCat" data-id="${c.id}" style="cursor:pointer"><b>${esc(c.name)}</b> <span class="tag ${c.kind === 'saving' ? 'sv' : ''}">${c.kind === 'saving' ? 'توفير' : 'راتب'}</span>${c.hidden ? ' (مخفي)' : ''}</div><span class="drag"><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="-1">▲</button><button class="b sm" data-act="moveC" data-id="${c.id}" data-d="1">▼</button></span></div>`).join('')}<button class="b" style="margin-top:8px" data-act="editCat" data-id="">+ تصنيف جديد</button> <button class="b" style="margin-top:8px" data-act="mergeDups">دمج التصنيفات المكررة</button></div>
   <div class="card"><h2>Excel</h2><div class="row"><label class="b pri sp" style="text-align:center">استيراد من Excel<input type="file" accept=".xlsx,.xls" data-chg="importXlsx"></label><button class="b sp" data-act="exportXlsx">تصدير إلى Excel</button></div><div class="mut" style="margin-top:6px">الاستيراد يكرر نفس عمليات الملف بدون تضاعف لو استوردت مرتين. العمليات اللي أضفتها من التطبيق لا تُمس.</div></div>
   <div class="card"><h2>Dropbox</h2>
   <div class="mut">الربط يخلي ملف Excel يتحدث في مجلد Dropbox بعد كل مزامنة، والعمليات بدون نت تنحفظ وتنرفع لما يرجع النت. الدمج تلقائي حسب الوقت وبدون فقدان بيانات.</div>
@@ -248,11 +274,6 @@ function vSettings() {
   <div class="mut">Redirect URI المطلوب إضافته في إعدادات تطبيق Dropbox: <b dir="ltr">${esc(location.origin + location.pathname)}</b></div>
   <div class="row" style="margin-top:8px">${d.token ? `<button class="b pri" data-act="syncNow">مزامنة الآن</button><button class="b dng" data-act="dbLogout">فصل</button>` : `<button class="b pri" data-act="dbLogin">ربط Dropbox</button>`}</div>
   <div class="mut" id="syncInfo">${d.last ? 'آخر مزامنة: ' + new Date(d.last).toLocaleString('ar') : ''}</div></div>
-  <div class="card"><h2>الرسائل التلقائية (MacroDroid)</h2>
-  <div class="mut">لتجهيز العملية تلقائياً عند وصول رسالة البنك. هذا الرابط تضعه في برنامج MacroDroid:</div>
-  <input id="sms_url" readonly dir="ltr" value="${esc(location.origin + location.pathname)}?sms=" onclick="this.select()"><button class="b sm" data-act="copyUrl">نسخ الرابط</button>
-  <ol style="padding-inline-start:20px;font-size:13px;line-height:1.9;margin:8px 0 0"><li>ثبّت MacroDroid من متجر Play.</li><li>ماكرو جديد ← المشغّل: «رسالة نصية مستلمة» (SMS Received) وحدد مرسلي البنوك.</li><li>الإجراء: «فتح رابط» (Launch URL / Open Website)، والصق الرابط أعلاه ثم أضف بعده نص الرسالة (Magic Text ← SMS Message).</li><li>جرّب برسالة حقيقية: يفتح التطبيق على الإضافة وقد جهز العملية، وأنت تختار التصنيف وتحفظ.</li></ol>
-  <div class="mut" style="margin-top:6px">لا يُحفظ شيء تلقائياً أبداً. وإذا ما اشتغل عندك، طريقة «مشاركة الرسالة» أو اللصق تبقى متاحة.</div></div>
   <div class="card"><h2>نسخة احتياطية</h2><div class="row"><button class="b sp" data-act="backupJson">حفظ نسخة JSON</button><label class="b sp" style="text-align:center">استرجاع من JSON<input type="file" accept=".json" data-chg="restoreJson"></label></div></div>
   <div class="mut" style="text-align:center;padding:8px">تطبيق الصرفيات — الإصدار ${APP_VERSION}</div>`;
 }
@@ -261,7 +282,7 @@ function vSettings() {
 const actions = {
   parseSms: () => { const t = ($('#sms_in').value || '').trim(); if (!t) return toast('الصق نص الرسالة أولاً', true); handleSms(t); },
   useRecent: (d) => { const x = (ui.recentList || [])[+d.i]; if (!x) return; ui.addType = 'exp'; ui.wallet = x.wallet; ui.cat = x.cat; ui.pay = x.pay || (cById(x.cat) || {}).kind || 'salary'; ui.payManual = true; ui.prefill = { amt: String(x.unit != null && !isNaN(x.unit) ? x.unit : x.amount), qty: x.qty && x.qty !== 1 ? String(x.qty) : '', note: x.note || '', ts: 0 }; ui.sms = null; ui.smsHash = null; render(); window.scrollTo(0, 0); toast('تمت التعبئة — عدّل المبلغ إذا لزم ثم احفظ'); },
-  noteChg: (d, el) => { const v = el.value.trim(); if (!v || ui.addType !== 'exp' || ui.cat) return; const prev = S.tx.filter((x) => !x.del && x.type === 'exp' && x.note === v).sort((a, b) => b.ts - a.ts)[0]; if (!prev || !cById(prev.cat) || cById(prev.cat).hidden) return; keepFields(); ui.cat = prev.cat; if (!ui.payManual) ui.pay = prev.pay || cById(prev.cat).kind; render(); restoreFields(); toast('اقترحت التصنيف: ' + cById(prev.cat).name); },
+  noteChg: (d, el) => { const v = el.value.trim(); if (!v || ui.addType !== 'exp' || ui.cat) return; const prev = S.tx.filter((x) => !x.del && x.type === 'exp' && x.note === v).sort((a, b) => b.ts - a.ts)[0]; if (!prev || !cById(prev.cat) || cById(prev.cat).hidden || cById(prev.cat).del) return; ui.cat = prev.cat; if (!ui.payManual) ui.pay = prev.pay || cById(prev.cat).kind; const g = $('#catGrid'), p = $('#paySeg'); if (g) g.innerHTML = catGridHtml(); if (p) p.innerHTML = paySegHtml(); toast('اقترحت التصنيف: ' + cById(prev.cat).name); },
   logW: (d, el) => { ui.logWallet = el.value; render(); },
   logC: (d, el) => { ui.logCat = el.value; render(); },
   recon: () => {
@@ -279,7 +300,6 @@ const actions = {
     S.settings.recon = { ts: now, items }; await touchSettings(); closeModal(); render();
     toast(n ? `تم تسجيل ${n} تسوية` : 'الأرصدة مطابقة ✓');
   },
-  copyUrl: async () => { const el = $('#sms_url'); try { await navigator.clipboard.writeText(el.value); toast('تم نسخ الرابط ✓'); } catch (e) { el.select(); document.execCommand('copy'); toast('تم نسخ الرابط ✓'); } },
   pickMonth: (d) => { const y = window.scrollY; ui.month = d.k; render(); window.scrollTo(0, y); },
   toggleOld: () => { ui.showOld = !ui.showOld; render(); },
   addType: (d) => { ui.addType = d.t; ui.cat = null; ui.pay = null; ui.payManual = false; render(); },
@@ -294,11 +314,11 @@ const actions = {
   saveNew: async () => {
     const t = ui.addType; const amt = parseNum($('#f_amt').value); if (!amt) return toast('اكتب المبلغ', true);
     if (!ui.wallet) return toast('اختر المحفظة', true);
-    const ts = inputToTs($('#f_ts').value); const note = $('#f_note').value.trim();
+    const ts = inputToTs($('#f_ts').value); const note = $('#f_note').value.trim(); const memo = ($('#f_memo') ? $('#f_memo').value : '').trim();
     let rec;
-    if (t === 'exp') { if (!ui.cat) return toast('اختر التصنيف', true); const q = parseNum($('#f_qty').value) || 1; rec = { id: Core.uid(), ts, type: 'exp', pay: ui.pay || (cById(ui.cat) || {}).kind || 'salary', wallet: ui.wallet, cat: ui.cat, unit: amt, qty: q, amount: Core.round2(amt * q), note }; }
-    else if (t === 'transfer') { if (!ui.toWallet || ui.toWallet === ui.wallet) return toast('اختر محفظتين مختلفتين', true); rec = { id: Core.uid(), ts, type: 'transfer', wallet: ui.wallet, to: ui.toWallet, amount: amt, fee: parseNum($('#f_fee').value), qty: 1, cat: null, note }; }
-    else rec = { id: Core.uid(), ts, type: 'income', wallet: ui.wallet, amount: amt, qty: 1, cat: null, note };
+    if (t === 'exp') { if (!ui.cat) return toast('اختر التصنيف', true); const q = parseNum($('#f_qty').value) || 1; rec = { id: Core.uid(), ts, type: 'exp', memo, pay: ui.pay || (cById(ui.cat) || {}).kind || 'salary', wallet: ui.wallet, cat: ui.cat, unit: amt, qty: q, amount: Core.round2(amt * q), note }; }
+    else if (t === 'transfer') { if (!ui.toWallet || ui.toWallet === ui.wallet) return toast('اختر محفظتين مختلفتين', true); rec = { id: Core.uid(), ts, type: 'transfer', memo, wallet: ui.wallet, to: ui.toWallet, amount: amt, fee: parseNum($('#f_fee').value), qty: 1, cat: null, note }; }
+    else rec = { id: Core.uid(), ts, type: 'income', memo, wallet: ui.wallet, amount: amt, qty: 1, cat: null, note };
     if (ui.smsHash && (S.settings.smsSeen || []).includes(ui.smsHash) && !confirm('هذي الرسالة سبق تسجيلها. تبي تسجلها مرة ثانية؟')) return;
     await putTx(rec); ui.lastHash = ui.smsHash || null;
     if (ui.smsHash) { S.settings.smsSeen = ((S.settings.smsSeen || []).concat(ui.smsHash)).slice(-300); await touchSettings(); }
@@ -315,14 +335,14 @@ const actions = {
     modal(`<h2>تعديل عملية</h2>${t.legacy ? '' : `<label class="f">المحفظة</label><select id="e_w">${wOpts(t.wallet)}</select>`}
     ${t.type === 'transfer' ? `<label class="f">إلى</label><select id="e_to">${wOpts(t.to)}</select><label class="f">الرسوم</label><input id="e_fee" value="${t.fee || 0}" inputmode="decimal">` : ''}
     ${t.type === 'exp' ? `<label class="f">التصنيف</label><select id="e_c">${cats(true).map((c) => `<option value="${c.id}" ${c.id === t.cat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select><label class="f">الخصم من</label><select id="e_p"><option value="salary" ${(t.pay || (cById(t.cat) || {}).kind) !== 'saving' ? 'selected' : ''}>الراتب</option><option value="saving" ${(t.pay || (cById(t.cat) || {}).kind) === 'saving' ? 'selected' : ''}>التوفير</option></select><label class="f">الكمية</label><input id="e_q" value="${t.qty || 1}" inputmode="decimal"><label class="f">السعر</label><input id="e_u" value="${t.unit != null && !isNaN(t.unit) ? t.unit : Core.round2(t.amount / (t.qty || 1))}" inputmode="decimal">` : `<label class="f">المبلغ</label><input id="e_a" value="${t.amount}" inputmode="decimal">`}
-    <label class="f">ملاحظة</label><input id="e_n" value="${esc(t.note || '')}"><label class="f">الوقت</label><input id="e_ts" type="datetime-local" value="${tsToInput(t.ts)}">
+    <label class="f">${t.type === 'exp' ? 'المحل' : 'الوصف'}</label><input id="e_n" value="${esc(t.note || '')}"><label class="f">ملاحظات</label><input id="e_m" value="${esc(t.memo || '')}"><label class="f">الوقت</label><input id="e_ts" type="datetime-local" value="${tsToInput(t.ts)}">
     <div class="row"><button class="b pri sp" data-act="saveEdit" data-id="${t.id}">حفظ</button><button class="b dng" data-act="delTx" data-id="${t.id}">حذف</button><button class="b" onclick="closeModal()">إلغاء</button></div>`);
   },
   saveEdit: async (d) => {
     const t = Object.assign({}, S.tx.find((x) => x.id === d.id)); const g = (i) => $('#' + i);
     if (g('e_w')) t.wallet = g('e_w').value; if (g('e_to')) { t.to = g('e_to').value; t.fee = parseNum(g('e_fee').value); }
     if (t.type === 'exp') { t.cat = g('e_c').value; t.pay = g('e_p').value; t.qty = parseNum(g('e_q').value) || 1; t.unit = parseNum(g('e_u').value); t.amount = Core.round2(t.unit * t.qty); } else t.amount = parseNum(g('e_a').value);
-    t.note = g('e_n').value.trim(); t.ts = inputToTs(g('e_ts').value);
+    t.note = g('e_n').value.trim(); t.memo = g('e_m').value.trim(); t.ts = inputToTs(g('e_ts').value);
     await putTx(t); closeModal(); render(); toast('تم التعديل ✓');
   },
   delTx: async (d) => { if (!confirm('حذف العملية؟')) return; const t = Object.assign({}, S.tx.find((x) => x.id === d.id), { del: true }); await putTx(t); closeModal(); render(); toast('تم الحذف'); },
@@ -356,6 +376,7 @@ const actions = {
     if (!S.anchorTs) S.anchorTs = 1; await touchSettings(); closeModal(); render();
   },
   delWallet: async (d) => { const w = wById(d.id); if (!w || !confirm(`حذف المحفظة «${w.name}»؟\nستختفي من القوائم وتبقى عملياتها السابقة محفوظة، وتقدر تعيدها من التعديل.`)) return; w.hidden = true; touchList(w); await touchSettings(); closeModal(); render(); toast('تم حذف (إخفاء) المحفظة'); },
+  mergeDups: async () => { const n = await dedupeCategories(); render(); toast(n ? `تم دمج ${n} تصنيف مكرر` : 'ما فيه تصنيفات مكررة ✓'); },
   delCat: async (d) => { const c = cById(d.id); if (!c || !confirm(`حذف التصنيف «${c.name}»؟\nسيختفي من القوائم وتبقى عملياته السابقة محفوظة، وتقدر تعيده من التعديل.`)) return; c.hidden = true; touchList(c); await touchSettings(); closeModal(); render(); toast('تم حذف (إخفاء) التصنيف'); },
   moveW: async (d) => { const l = wallets(true); const i = l.findIndex((w) => w.id === d.id), j = i + +d.d; if (j < 0 || j >= l.length) return; [l[i].order, l[j].order] = [l[j].order, l[i].order]; touchList(l[i]); touchList(l[j]); await touchSettings(); render(); },
   editCat: (d) => {
@@ -370,6 +391,12 @@ const actions = {
   noColor: () => { ui.tmpColor = null; $('#c_colTxt').textContent = 'بدون لون'; },
   saveCat: async (d) => {
     const name = $('#c_n').value.trim(); if (!name) return toast('اكتب الاسم', true);
+    const other = S.categories.find((x) => !x.del && x.id !== d.id && catKey(x.name) === catKey(name));
+    if (other) {
+      if (!d.id) { if (other.hidden && confirm(`التصنيف «${other.name}» موجود ومخفي. تبي تعيد إظهاره؟`)) { other.hidden = false; touchList(other); await touchSettings(); closeModal(); render(); } else if (!other.hidden) toast(`التصنيف «${other.name}» موجود مسبقاً`, true); return; }
+      if (!confirm(`يوجد تصنيف آخر باسم «${other.name}». تبي تدمج هذا التصنيف فيه؟ (تنتقل كل عملياته إليه ويُحذف هذا)`)) return;
+      const me = cById(d.id); const n2 = await mergeCatInto(me, other); await touchSettings(); closeModal(); render(); toast(`تم الدمج (${n2} عملية)`); return;
+    }
     let c = d.id ? cById(d.id) : null; if (!c) { c = { id: 'c' + Date.now().toString(36), order: S.categories.length }; S.categories.push(c); }
     c.name = name; c.kind = $('#c_k').value; c.hidden = $('#c_h').checked; c.logo = ui.tmpLogo; c.color = ui.tmpColor; touchList(c); await touchSettings(); closeModal(); render();
   },
@@ -392,12 +419,12 @@ const actions = {
     // نحتفظ بالمحافظ/التصنيفات الحالية (تعديلات المستخدم)، ونضيف الناقص
     const keepW = new Set(S.wallets.map((w) => w.id)); const nameW = {}; S.wallets.forEach((w) => (nameW[w.name] = w.id));
     r.wallets.forEach((w) => { if (!keepW.has(w.id) && !nameW[w.name]) { w.upd = Date.now(); S.wallets.push(w); } else { const cur = S.wallets.find((x) => x.id === w.id); if (cur) { cur.opening = w.opening; touchList(cur); } } });
-    const idMap = {}; const nameC = {}; S.categories.forEach((c) => (nameC[c.name] = c));
-    r.categories.forEach((c) => { if (nameC[c.name]) idMap[c.id] = nameC[c.name].id; else { const n = Object.assign({}, c, { id: 'c' + Date.now().toString(36) + c.id, order: S.categories.length, upd: Date.now() }); S.categories.push(n); idMap[c.id] = n.id; nameC[n.name] = n; } });
+    const idMap = {}; const nameC = {}; S.categories.filter((c) => !c.del).forEach((c) => (nameC[catKey(c.name)] = c));
+    r.categories.forEach((c) => { if (nameC[catKey(c.name)]) idMap[c.id] = nameC[catKey(c.name)].id; else { const n = Object.assign({}, c, { id: 'c' + Date.now().toString(36) + c.id, order: S.categories.length, upd: Date.now() }); S.categories.push(n); idMap[c.id] = n.id; nameC[catKey(n.name)] = n; } });
     const now = Date.now(); const fresh = r.tx.map((t) => Object.assign({}, t, { cat: t.cat ? idMap[t.cat] : null, upd: now }));
     const keepOther = S.tx.filter((t) => !String(t.id).startsWith('imp-'));
     S.tx = keepOther.concat(fresh); await DB.clearTx(); await DB.putMany(S.tx);
-    Object.assign(S.salaries, r.salaries); S.anchorTs = r.anchorTs;
+    Object.assign(S.salaries, r.salaries); S.anchorTs = r.anchorTs; await dedupeCategories();
     await touchSettings(); closeModal(); ui.pending = null; ui.month = null; render(); toast(`تم استيراد ${fresh.length} عملية ✓`);
   },
   exportXlsx: () => { const wb = Core.exportWorkbook(XLSX, S); XLSX.writeFile(wb, 'الصرفيات.xlsx'); },
@@ -410,7 +437,7 @@ const actions = {
   syncNow: () => syncNow(true),
 };
 let kept = {};
-function keepFields() { kept = {}; ['f_amt', 'f_qty', 'f_fee', 'f_note', 'f_ts'].forEach((i) => { const e = $('#' + i); if (e) kept[i] = e.value; }); }
+function keepFields() { kept = {}; ['f_amt', 'f_qty', 'f_fee', 'f_note', 'f_memo', 'f_ts'].forEach((i) => { const e = $('#' + i); if (e) kept[i] = e.value; }); }
 function restoreFields() { Object.entries(kept).forEach(([i, v]) => { const e = $('#' + i); if (e) e.value = v; }); }
 
 /* ---------------- Dropbox ---------------- */
@@ -460,7 +487,7 @@ function renderSync() {
 async function applyMerged(m) {
   S.tx = m.tx; S.wallets = m.wallets; S.categories = m.categories; S.salaries = m.salaries; S.settingsUpd = m.settingsUpd;
   S.settings = Object.assign({}, m.settings, { dropbox: S.settings.dropbox }); if (m.anchorTs) S.anchorTs = m.anchorTs;
-  await DB.clearTx(); await DB.putMany(S.tx); await saveMeta(); applyTheme();
+  await DB.clearTx(); await DB.putMany(S.tx); await saveMeta(); applyTheme(); await dedupeCategories();
 }
 async function syncNow(manual) {
   const d = S.settings.dropbox; if (!d.token || syncing) return; if (!navigator.onLine) { renderSync(); if (manual) toast('ما فيه اتصال، التغييرات محفوظة وتنرفع لاحقاً', true); return; }
@@ -494,6 +521,7 @@ window.addEventListener('offline', renderSync);
   await load(); applyTheme();
   const q = new URLSearchParams(location.search);
   if (q.get('code')) { try { await Dropbox.finish(q.get('code')); toast('تم ربط Dropbox ✓'); history.replaceState(null, '', location.pathname); ui.tab = 'settings'; setTimeout(() => syncNow(true), 500); } catch (e) { toast(e.message, true); } }
+  { const nd = await dedupeCategories(); if (nd) setTimeout(() => toast(`تم دمج ${nd} تصنيف مكرر تلقائياً`), 800); }
   render();
   { const txt = q.get('sms') || [q.get('title'), q.get('text')].filter(Boolean).join('\n'); if (txt && !q.get('code')) { history.replaceState(null, '', location.pathname); handleSms(txt); } }
   if (DB.broken) toast('تنبيه: المتصفح لا يسمح بالتخزين في هذا الوضع، افتح التطبيق من رابط https حتى تنحفظ بياناتك', true);

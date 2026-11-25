@@ -355,7 +355,7 @@
   Core.exportWorkbook = function (XLSX, state) {
     const ms = state.settings.monthStart || 1;
     const wb = XLSX.utils.book_new();
-    const cats = state.categories.filter((c) => !c.hidden || true).sort((a, b) => a.order - b.order);
+    const cats = state.categories.filter((c) => !c.del).sort((a, b) => a.order - b.order);
     const wallets = state.wallets.slice().sort((a, b) => a.order - b.order);
     const catName = {}; state.categories.forEach((c) => (catName[c.id] = c.name));
     const wIdx = {}; wallets.forEach((w, i) => (wIdx[w.id] = i + 1));
@@ -393,8 +393,8 @@
       state.tx.filter((t) => !t.del && t.ts >= a && t.ts <= b).sort((p, q) => p.ts - q.ts).forEach((t) => {
         const ser = Core.tsToSerial(t.ts);
         const q = t.qty || 1;
-        if (t.type === 'exp') rows.push([t.legacy ? '' : wIdx[t.wallet], catName[t.cat], t.amount, t.note || '', t.unit != null && !isNaN(t.unit) ? t.unit : round2(t.amount / q), q, ser]);
-        else if (t.type === 'income' || t.type === 'adj') rows.push([wIdx[t.wallet], '', -t.amount, t.note || '', -t.amount, 1, ser]);
+        if (t.type === 'exp') rows.push([t.legacy ? '' : wIdx[t.wallet], catName[t.cat], t.amount, [t.note, t.memo].filter(Boolean).join(' | '), t.unit != null && !isNaN(t.unit) ? t.unit : round2(t.amount / q), q, ser]);
+        else if (t.type === 'income' || t.type === 'adj') rows.push([wIdx[t.wallet], '', -t.amount, [t.note, t.memo].filter(Boolean).join(' | '), -t.amount, 1, ser]);
         else if (t.type === 'transfer') { rows.push([wIdx[t.wallet], t.cat ? catName[t.cat] : '', round2(t.amount + (t.fee || 0)), t.note || '', round2(t.amount + (t.fee || 0)), 1, ser]); rows.push([wIdx[t.to], t.cat ? catName[t.cat] : '', -t.amount, '', -t.amount, 1, ser]); }
       });
       const ws = XLSX.utils.aoa_to_sheet(rows);
