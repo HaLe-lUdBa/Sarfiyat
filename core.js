@@ -343,11 +343,18 @@
       tx: mergeList(a.tx, b.tx, 'id'),
       wallets: mergeList(a.wallets, b.wallets, 'id').sort((p, q) => p.order - q.order),
       categories: mergeList(a.categories, b.categories, 'id').sort((p, q) => p.order - q.order),
-      salaries: Object.assign({}, a.salaries, b.salaries),
+      salaries: {}, salUpd: {},
       settings: ((a.settingsUpd || 0) >= (b.settingsUpd || 0) ? a : b).settings,
       settingsUpd: Math.max(a.settingsUpd || 0, b.settingsUpd || 0),
       anchorTs: Math.min(a.anchorTs || Infinity, b.anchorTs || Infinity) === Infinity ? 0 : Math.min(a.anchorTs || Infinity, b.anchorTs || Infinity),
     };
+    // الراتب: لكل شهر وقت تعديل، والأحدث يفوز (المحلي يفوز عند التساوي)
+    const au = a.salUpd || {}, bu = b.salUpd || {};
+    new Set([...Object.keys(a.salaries || {}), ...Object.keys(b.salaries || {})]).forEach((k) => {
+      const inA = a.salaries && a.salaries[k] != null, inB = b.salaries && b.salaries[k] != null;
+      const useB = inB && (!inA || (bu[k] || 0) > (au[k] || 0) || (!(au[k] || 0) && !(bu[k] || 0) && !a.salaries[k] && b.salaries[k]));
+      out.salaries[k] = useB ? b.salaries[k] : a.salaries[k]; out.salUpd[k] = useB ? (bu[k] || 0) : (au[k] || 0);
+    });
     // الأرصدة الافتتاحية: تؤخذ من النسخة الأحدث للمحفظة (ضمن mergeList)
     out.tx.sort((p, q) => p.ts - q.ts);
     return out;

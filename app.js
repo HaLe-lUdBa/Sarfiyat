@@ -78,7 +78,7 @@ async function dedupeCategories() {
 }
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
-const APP_VERSION = '7';
+const APP_VERSION = '8';
 const catColor = (id) => { const c = S.categories.find((x) => x.id === id); return c && c.color ? c.color : null; };
 const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
@@ -311,7 +311,7 @@ const actions = {
   logMonth: (d, el) => { ui.logMonth = el.value; render(); },
   logQ: (d, el) => { ui.logFilter = el.value.trim(); render(); const q = $('#logQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } },
   salary: (d) => { const cur = S.salaries[d.k] || ''; const [y0, m0] = d.k.split('-').map(Number); const sd = Core.starts[d.k] || S.settings.monthStart; modal(`<h2>راتب شهر ${d.k}</h2><input id="m_sal" inputmode="decimal" value="${cur}"><label class="f">يوم نزول الراتب (يبدأ منه هذا الشهر)</label><input id="m_sd" type="number" inputmode="numeric" min="1" max="28" value="${sd}" style="text-align:center"><div class="mut" style="margin-bottom:8px">الشهر الحالي: ${Core.monthLabel(d.k, S.settings.monthStart)}</div><div class="row"><button class="b pri sp" data-act="saveSalary" data-k="${d.k}">حفظ</button><button class="b" onclick="closeModal()">إلغاء</button></div>`); },
-  saveSalary: async (d) => { S.salaries[d.k] = parseNum($('#m_sal').value); const day = Math.max(1, Math.min(28, parseInt($('#m_sd').value) || S.settings.monthStart)); if (day === S.settings.monthStart) delete S.settings.starts[d.k]; else S.settings.starts[d.k] = day; ui.month = null; ui.logMonth = null; await touchSettings(); closeModal(); render(); },
+  saveSalary: async (d) => { S.salaries[d.k] = parseNum($('#m_sal').value); (S.salUpd = S.salUpd || {})[d.k] = Date.now(); const day = Math.max(1, Math.min(28, parseInt($('#m_sd').value) || S.settings.monthStart)); if (day === S.settings.monthStart) delete S.settings.starts[d.k]; else S.settings.starts[d.k] = day; ui.month = null; ui.logMonth = null; await touchSettings(); closeModal(); render(); },
   saveNew: async () => {
     const t = ui.addType; const amt = parseNum($('#f_amt').value); if (!amt) return toast('اكتب المبلغ', true);
     if (!ui.wallet) return toast('اختر المحفظة', true);
@@ -426,7 +426,7 @@ const actions = {
     const now = Date.now(); const fresh = r.tx.map((t) => Object.assign({}, t, { cat: t.cat ? idMap[t.cat] : null, upd: now }));
     const keepOther = S.tx.filter((t) => !String(t.id).startsWith('imp-'));
     S.tx = keepOther.concat(fresh); await DB.clearTx(); await DB.putMany(S.tx);
-    Object.assign(S.salaries, r.salaries); S.anchorTs = r.anchorTs; await dedupeCategories();
+    Object.assign(S.salaries, r.salaries); S.salUpd = S.salUpd || {}; Object.keys(r.salaries).forEach((k) => { S.salUpd[k] = S.salUpd[k] || 1; }); S.anchorTs = r.anchorTs; await dedupeCategories();
     await touchSettings(); closeModal(); ui.pending = null; ui.month = null; render(); toast(`تم استيراد ${fresh.length} عملية ✓`);
   },
   exportXlsx: () => { const wb = Core.exportWorkbook(XLSX, S); XLSX.writeFile(wb, 'الصرفيات.xlsx'); },
@@ -487,7 +487,7 @@ function renderSync() {
   if (!navigator.onLine) { el.textContent = d.dirty ? 'بدون نت — محفوظ محلياً' : 'بدون نت'; el.className = 'sync off'; } else if (d.err) { el.textContent = 'خطأ مزامنة'; el.className = 'sync err'; } else { el.textContent = d.dirty ? 'بانتظار المزامنة' : 'متزامن'; el.className = 'sync ok'; }
 }
 async function applyMerged(m) {
-  S.tx = m.tx; S.wallets = m.wallets; S.categories = m.categories; S.salaries = m.salaries; S.settingsUpd = m.settingsUpd;
+  S.tx = m.tx; S.wallets = m.wallets; S.categories = m.categories; S.salaries = m.salaries; S.salUpd = m.salUpd || {}; S.settingsUpd = m.settingsUpd;
   S.settings = Object.assign({}, m.settings, { dropbox: S.settings.dropbox }); if (m.anchorTs) S.anchorTs = m.anchorTs;
   await DB.clearTx(); await DB.putMany(S.tx); await saveMeta(); applyTheme(); await dedupeCategories();
 }
