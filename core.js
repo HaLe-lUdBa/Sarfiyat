@@ -16,17 +16,18 @@
   Core.fmtTime = (ts) => { const p = Core.parts(ts); return `${p2(p.h)}:${p2(p.mi)}`; };
 
   // مفتاح الشهر: الشهر يبدأ في اليوم monthStart ويُسمّى بشهر البداية
+  Core.starts = {}; // يوم بداية مخصص لكل شهر (حسب يوم نزول الراتب): {"2026-10": 25}
+  const stDay = (y, m, def) => Core.starts[`${y}-${p2(m)}`] || def || 1;
   Core.monthKey = (ts, monthStart) => {
     const p = Core.parts(ts);
     let y = p.y, m = p.m;
-    if (monthStart > 1 && p.d < monthStart) { m -= 1; if (m < 1) { m = 12; y -= 1; } }
+    if (p.d < stDay(y, m, monthStart)) { m -= 1; if (m < 1) { m = 12; y -= 1; } }
     return `${y}-${p2(m)}`;
   };
   Core.monthRange = (key, monthStart) => {
     const [y, m] = key.split('-').map(Number);
-    const start = Date.UTC(y, m - 1, monthStart || 1);
-    const end = monthStart > 1 ? Date.UTC(y, m, monthStart) - 1 : Date.UTC(y, m, 1) - 1;
-    return [start, end];
+    const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1;
+    return [Date.UTC(y, m - 1, stDay(y, m, monthStart)), Date.UTC(ny, nm - 1, stDay(ny, nm, monthStart)) - 1];
   };
   Core.monthLabel = (key, monthStart) => {
     const [a, b] = Core.monthRange(key, monthStart);
@@ -311,6 +312,7 @@
   };
   // مبلغ العملية كمصروف على الراتب/التوفير (الرسوم تُحسب ضمن الراتب)
   Core.monthSummary = (state, key) => {
+    Core.starts = (state.settings && state.settings.starts) || {};
     const ms = state.settings.monthStart || 1;
     const catKind = {}; state.categories.forEach((c) => (catKind[c.id] = c.kind));
     const byCat = {}; let salaryExp = 0, savingExp = 0, fees = 0, income = 0;
@@ -327,6 +329,7 @@
     return { byCat, salaryExp: round2(salaryExp), savingExp: round2(savingExp), fees: round2(fees), income: round2(income), salary, remaining: round2(salary - salaryExp), total: round2(salaryExp + savingExp) };
   };
   Core.monthKeys = (state) => {
+    Core.starts = (state.settings && state.settings.starts) || {};
     const ms = state.settings.monthStart || 1; const s = new Set();
     state.tx.filter(live).forEach((t) => s.add(Core.monthKey(t.ts, ms)));
     return Array.from(s).sort().reverse();

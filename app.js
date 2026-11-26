@@ -78,7 +78,7 @@ async function dedupeCategories() {
 }
 const wById = (id) => S.wallets.find((w) => w.id === id);
 const cById = (id) => S.categories.find((c) => c.id === id);
-const APP_VERSION = '6';
+const APP_VERSION = '7';
 const catColor = (id) => { const c = S.categories.find((x) => x.id === id); return c && c.color ? c.color : null; };
 const walletIcon = (w, cls) => w && w.logo ? `<img class="wlogo ${cls || ''}" src="${w.logo}" alt="">` : `<div class="wlogo ${cls || ''}" style="background:${esc(w ? w.color || '#1f5fa8' : '#888')}">${esc(w ? w.name.slice(0, 1) : '؟')}</div>`;
 function toast(msg, bad) { const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), bad ? 6000 : 2600); }
@@ -101,6 +101,7 @@ const isOpen = (sc, y, i) => (ui.open[sc][y] !== undefined ? ui.open[sc][y] : i 
 document.addEventListener('toggle', (e) => { const d = e.target; if (d.tagName === 'DETAILS' && d.dataset.yr) ui.open[d.dataset.sc][d.dataset.yr] = d.open; }, true);
 function go(tab) { if (tab !== 'add') { ui.prefill = null; ui.sms = null; ui.smsHash = null; } ui.tab = tab; render(); window.scrollTo(0, 0); }
 function render() {
+  Core.starts = S.settings.starts = S.settings.starts || {};
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === ui.tab));
   const v = $('#view');
   v.innerHTML = ({ home: vHome, add: vAdd, log: vLog, wallets: vWallets, settings: vSettings })[ui.tab]();
@@ -309,8 +310,8 @@ const actions = {
   pickPay: (d) => { keepFields(); ui.pay = d.p; ui.payManual = true; render(); restoreFields(); },
   logMonth: (d, el) => { ui.logMonth = el.value; render(); },
   logQ: (d, el) => { ui.logFilter = el.value.trim(); render(); const q = $('#logQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } },
-  salary: (d) => { const cur = S.salaries[d.k] || ''; modal(`<h2>راتب شهر ${d.k}</h2><input id="m_sal" inputmode="decimal" value="${cur}"><div class="row"><button class="b pri sp" data-act="saveSalary" data-k="${d.k}">حفظ</button><button class="b" onclick="closeModal()">إلغاء</button></div>`); },
-  saveSalary: async (d) => { S.salaries[d.k] = parseNum($('#m_sal').value); await touchSettings(); closeModal(); render(); },
+  salary: (d) => { const cur = S.salaries[d.k] || ''; const [y0, m0] = d.k.split('-').map(Number); const sd = Core.starts[d.k] || S.settings.monthStart; modal(`<h2>راتب شهر ${d.k}</h2><input id="m_sal" inputmode="decimal" value="${cur}"><label class="f">يوم نزول الراتب (يبدأ منه هذا الشهر)</label><input id="m_sd" type="number" inputmode="numeric" min="1" max="28" value="${sd}" style="text-align:center"><div class="mut" style="margin-bottom:8px">الشهر الحالي: ${Core.monthLabel(d.k, S.settings.monthStart)}</div><div class="row"><button class="b pri sp" data-act="saveSalary" data-k="${d.k}">حفظ</button><button class="b" onclick="closeModal()">إلغاء</button></div>`); },
+  saveSalary: async (d) => { S.salaries[d.k] = parseNum($('#m_sal').value); const day = Math.max(1, Math.min(28, parseInt($('#m_sd').value) || S.settings.monthStart)); if (day === S.settings.monthStart) delete S.settings.starts[d.k]; else S.settings.starts[d.k] = day; ui.month = null; ui.logMonth = null; await touchSettings(); closeModal(); render(); },
   saveNew: async () => {
     const t = ui.addType; const amt = parseNum($('#f_amt').value); if (!amt) return toast('اكتب المبلغ', true);
     if (!ui.wallet) return toast('اختر المحفظة', true);
@@ -318,6 +319,7 @@ const actions = {
     let rec;
     if (t === 'exp') { if (!ui.cat) return toast('اختر التصنيف', true); const q = parseNum($('#f_qty').value) || 1; rec = { id: Core.uid(), ts, type: 'exp', memo, pay: ui.pay || (cById(ui.cat) || {}).kind || 'salary', wallet: ui.wallet, cat: ui.cat, unit: amt, qty: q, amount: Core.round2(amt * q), note }; }
     else if (t === 'transfer') { if (!ui.toWallet || ui.toWallet === ui.wallet) return toast('اختر محفظتين مختلفتين', true); rec = { id: Core.uid(), ts, type: 'transfer', memo, wallet: ui.wallet, to: ui.toWallet, amount: amt, fee: parseNum($('#f_fee').value), qty: 1, cat: null, note }; }
+    else if (t === 'income' && /راتب/.test(note) && !S.settings.starts[Core.parts(ts).y + '-' + String(Core.parts(ts).m).padStart(2, '0')] && Core.parts(ts).d >= 20 && Core.parts(ts).d <= 28 && Core.parts(ts).d !== S.settings.monthStart) { const p = Core.parts(ts); S.settings.starts[`${p.y}-${String(p.m).padStart(2, '0')}`] = p.d; await touchSettings(); Core.starts = S.settings.starts; toast(`تم ضبط بداية الشهر على ${p.d} من نزول الراتب`); rec = { id: Core.uid(), ts, type: 'income', memo, wallet: ui.wallet, amount: amt, qty: 1, cat: null, note }; }
     else rec = { id: Core.uid(), ts, type: 'income', memo, wallet: ui.wallet, amount: amt, qty: 1, cat: null, note };
     if (ui.smsHash && (S.settings.smsSeen || []).includes(ui.smsHash) && !confirm('هذي الرسالة سبق تسجيلها. تبي تسجلها مرة ثانية؟')) return;
     await putTx(rec); ui.lastHash = ui.smsHash || null;
